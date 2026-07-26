@@ -1,0 +1,46 @@
+---
+source: tests/spec_gen_test.rs
+expression: rendered
+---
+
+Name:           hello-world
+Version:        1.0
+Release:        1%{?dist}
+Summary:        A friendly greeting program
+License:        MIT
+Source0:       https://example.org/releases/hello-world-1.0.tar.gz
+Source0_sha256: 9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a00
+
+
+%description
+hello-world prints a friendly greeting to standard output.
+
+%prep
+%autosetup
+
+
+%build
+
+%make_build
+
+
+%install
+
+%make_install
+
+
+
+%files
+
+%{_bindir}/hello-world
+
+%doc README.md
+
+%license LICENSE
+
+%changelog
+
+* Mon Jun 29 2026 Jane Doe <jane@example.org>
+- 1.0-1
+
+- Initial package

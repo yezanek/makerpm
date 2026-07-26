@@ -1,0 +1,29 @@
+[package]
+name = "myservice"
+version = "1.0.0"
+summary = "A service with custom scriptlets"
+license = "MIT"
+description = "myservice is a system service with custom pre/post installation scripts."
+
+sources = ["https://example.org/myservice-1.0.0.tar.gz"]
+sha256sums = ["dd1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"]
+
+[package.build]
+system = "make"
+
+[package.files]
+paths = ["%{_bindir}/myservice"]
+dirs = ["%{_sysconfdir}/myservice/"]
+configs_noreplace = ["%{_sysconfdir}/myservice/config.toml"]
+
+[package.scriptlets]
+pre = "/usr/sbin/useradd -r -s /sbin/nologin myservice 2>/dev/null || :"
+post = "/usr/bin/systemctl daemon-reload"
+postun = "/usr/bin/systemctl daemon-reload"
+interpreter = "/bin/sh"
+
+[[package.changelog]]
+version = "1.0.0-1"
+date = "2026-07-25"
+packager = "Test User <test@example.org>"
+entries = ["Initial package", "Add systemd integration"]

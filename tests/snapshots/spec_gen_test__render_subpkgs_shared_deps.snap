@@ -1,0 +1,73 @@
+---
+source: tests/spec_gen_test.rs
+expression: rendered
+---
+
+Name:           libsodium-test
+Version:        1.0.19
+Release:        1%{?dist}
+Summary:        A shared-dependency test package
+License:        ISC
+Source0:       https://example.org/libsodium-test-1.0.19.tar.gz
+Source0_sha256: cc1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
+
+
+%description
+A package demonstrating subpackages sharing dependencies.
+
+%package        devel
+Summary:        Development files for libsodium-test
+License:        ISC
+BuildRequires:  cmake
+Requires:       libsodium-test
+
+%description    devel
+Header files and static library for developing with libsodium-test.
+
+%package        static
+Summary:        Static library for libsodium-test
+License:        ISC
+Requires:       libsodium-test
+
+%description    static
+Static library for libsodium-test, for statically linked builds.
+
+%prep
+%autosetup
+
+
+%build
+
+%make_build
+
+
+%install
+
+%make_install
+
+
+
+%files
+
+%{_libdir}/libsodium-test.so.*
+
+%license COPYING
+
+%files          devel
+
+%{_libdir}/libsodium-test.a
+
+%{_libdir}/pkgconfig/libsodium-test.pc
+
+%doc README.devel
+
+%files          static
+
+%{_libdir}/libsodium-test.a
+
+%changelog
+
+* Mon Jul 20 2026 Test User <test@example.org>
+- 1.0.19-1
+
+- Update to version 1.0.19
