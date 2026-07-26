@@ -264,7 +264,7 @@ fn main() -> ExitCode {
                 }
                 Err(e) => {
                     eprintln!("Error collecting artifacts: {e}");
-                    let _ = makerpm::build_tree::clean_build_tree(&toml_dir);
+                    eprintln!("build tree preserved at: {}", topdir.display());
                     return ExitCode::from(1);
                 }
             }
@@ -293,6 +293,13 @@ fn main() -> ExitCode {
                     }
                 }
             };
+
+            if name.chars().any(|c| c == '"' || c == '\\' || c.is_control()) {
+                eprintln!(
+                    "Error: package name {name:?} contains characters that are not valid in a TOML string"
+                );
+                return ExitCode::from(1);
+            }
 
             let toml_content = format!(
                 r#"[package]
