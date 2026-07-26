@@ -41,7 +41,8 @@ fn version_hyphen_triggers_error() {
 #[test]
 fn license_unknown_triggers_warning() {
     let result = load_and_validate("err_license_unknown.toml");
-    assert!(has_diagnostic_matching(
+    assert!(!result.has_errors());
+    assert!(has_warning_matching(
         &result,
         "not a valid SPDX expression"
     ));

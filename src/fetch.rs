@@ -98,23 +98,34 @@ fn cache_path_for(cache_dir: &Path, filename: &str) -> PathBuf {
 }
 
 fn validate_cache_filename(filename: &str) -> Result<(), MakerpmError> {
-    if filename.is_empty() || filename == "." || filename == ".." {
-        return Err(MakerpmError::Fetch {
-            url: String::new(),
-            source: Box::new(std::io::Error::other(format!(
-                "invalid source filename: \"{filename}\""
-            ))),
-        });
-    }
-    for component in std::path::Path::new(filename).components() {
-        if matches!(component, std::path::Component::ParentDir) {
+    let path = std::path::Path::new(filename);
+    let mut components = path.components();
+    match components.next() {
+        None => {
             return Err(MakerpmError::Fetch {
                 url: String::new(),
                 source: Box::new(std::io::Error::other(format!(
-                    "source filename contains path traversal: \"{filename}\""
+                    "invalid source filename: \"{filename}\""
                 ))),
             });
         }
+        Some(std::path::Component::Normal(_)) => {}
+        Some(_) => {
+            return Err(MakerpmError::Fetch {
+                url: String::new(),
+                source: Box::new(std::io::Error::other(format!(
+                    "source filename is not a single path component: \"{filename}\""
+                ))),
+            });
+        }
+    }
+    if components.next().is_some() {
+        return Err(MakerpmError::Fetch {
+            url: String::new(),
+            source: Box::new(std::io::Error::other(format!(
+                "source filename contains path separators: \"{filename}\""
+            ))),
+        });
     }
     Ok(())
 }
@@ -207,7 +218,7 @@ pub fn fetch_sources(
             SourceEntry::Remote { ref filename, ref url } => {
                 validate_cache_filename(filename)?;
                 let cache_path = cache_path_for(&opts.cache_dir, filename);
-                let declared_checksum = checksum_for(spec, &entry, idx);
+                let declared_checksum = checksum_for(spec, idx, _kind);
 
                 // §8.2 algorithm: decide whether to download
                 let mut cached_hash: Option<String> = None;
@@ -235,7 +246,10 @@ pub fn fetch_sources(
                     }
 
                     let part_path = cache_path.with_extension("part");
-                    downloader.download_to(url, &part_path)?;
+                    if let Err(e) = downloader.download_to(url, &part_path) {
+                        let _ = std::fs::remove_file(&part_path);
+                        return Err(e);
+                    }
                     std::fs::rename(&part_path, &cache_path).map_err(|e| {
                         MakerpmError::CacheDir {
                             path: cache_path.clone(),
@@ -281,10 +295,10 @@ pub fn fetch_sources(
     Ok(results)
 }
 
-fn checksum_for<'a>(spec: &'a PkgSpecFile, entry: &SourceEntry, idx: usize) -> Option<&'a str> {
-    let sums = match entry {
-        SourceEntry::Remote { .. } => &spec.package.sha256sums,
-        SourceEntry::Local { .. } => &spec.package.sha256sums,
+fn checksum_for<'a>(spec: &'a PkgSpecFile, idx: usize, kind: &str) -> Option<&'a str> {
+    let sums = match kind {
+        "patch" => &spec.package.patch_sha256sums,
+        _ => &spec.package.sha256sums,
     };
     sums.get(idx).map(String::as_str)
 }
@@ -579,7 +593,8 @@ mod tests {
 
         let results = fetch_sources(&spec, tmp.path(), &opts, &dl).unwrap();
         assert_eq!(results.len(), 1);
-        assert!(!results[0].was_download || results[0].was_download);
+        assert!(results[0].was_download, "cache miss should trigger download");
+        assert_eq!(std::fs::read(cache_dir.join("data.bin")).unwrap(), content);
     }
 
     #[test]
@@ -610,7 +625,11 @@ mod tests {
 
         struct FailingDownloader;
         impl Downloader for FailingDownloader {
-            fn download_to(&self, _url: &str, _dest: &Path) -> Result<u64, MakerpmError> {
+            fn download_to(&self, _url: &str, dest: &Path) -> Result<u64, MakerpmError> {
+                std::fs::write(dest, b"partial").map_err(|e| MakerpmError::Fetch {
+                    url: "fail".to_string(),
+                    source: Box::new(e),
+                })?;
                 Err(MakerpmError::Fetch {
                     url: "fail".to_string(),
                     source: Box::new(std::io::Error::other("simulated failure")),
@@ -670,6 +689,16 @@ mod tests {
     #[test]
     fn validate_cache_filename_rejects_traversal() {
         assert!(validate_cache_filename("foo/../../etc/passwd").is_err());
+    }
+
+    #[test]
+    fn validate_cache_filename_rejects_absolute() {
+        assert!(validate_cache_filename("/etc/passwd").is_err());
+    }
+
+    #[test]
+    fn validate_cache_filename_rejects_nested() {
+        assert!(validate_cache_filename("sub/dir/file.tar.gz").is_err());
     }
 
     #[test]

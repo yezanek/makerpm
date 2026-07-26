@@ -2,34 +2,52 @@ use std::process::ExitCode;
 
 use clap::Parser;
 
+enum EarlyReturn {
+    Code(ExitCode),
+    Parsed(
+        Box<makerpm::model::PkgSpecFile>,
+        std::path::PathBuf,
+        makerpm::validate::ValidationResult,
+    ),
+}
+
+fn load_and_validate(spec_file: &std::path::Path) -> EarlyReturn {
+    let toml_str = match std::fs::read_to_string(spec_file) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("Error: failed to read {}: {e}", spec_file.display());
+            return EarlyReturn::Code(ExitCode::from(2));
+        }
+    };
+
+    let spec = match makerpm::parse::parse_pkgspec(&toml_str) {
+        Ok(s) => s,
+        Err(e) => {
+            let report = miette::Report::new(e);
+            eprintln!("{report:?}");
+            return EarlyReturn::Code(ExitCode::from(1));
+        }
+    };
+
+    let toml_dir = spec_file
+        .parent()
+        .unwrap_or_else(|| std::path::Path::new("."))
+        .to_path_buf();
+
+    let result = makerpm::validate::validate(&spec, &toml_dir);
+
+    EarlyReturn::Parsed(Box::new(spec), toml_dir, result)
+}
+
 fn main() -> ExitCode {
     let cli = makerpm::cli::Cli::parse();
 
     match cli.command {
         makerpm::cli::Commands::Validate(args) => {
-            let toml_str = match std::fs::read_to_string(&args.spec_file) {
-                Ok(s) => s,
-                Err(e) => {
-                    eprintln!("Error: failed to read {}: {e}", args.spec_file.display());
-                    return ExitCode::from(2);
-                }
+            let (_spec, _toml_dir, result) = match load_and_validate(&args.spec_file) {
+                EarlyReturn::Parsed(s, d, r) => (s, d, r),
+                EarlyReturn::Code(code) => return code,
             };
-
-            let spec = match makerpm::parse::parse_pkgspec(&toml_str) {
-                Ok(s) => s,
-                Err(e) => {
-                    let report = miette::Report::new(e);
-                    eprintln!("{report:?}");
-                    return ExitCode::from(1);
-                }
-            };
-
-            let toml_dir = args
-                .spec_file
-                .parent()
-                .unwrap_or_else(|| std::path::Path::new("."));
-
-            let result = makerpm::validate::validate(&spec, toml_dir);
 
             if result.diagnostics.is_empty() {
                 return ExitCode::SUCCESS;
@@ -48,29 +66,10 @@ fn main() -> ExitCode {
         }
 
         makerpm::cli::Commands::Spec(args) => {
-            let toml_str = match std::fs::read_to_string(&args.spec_file) {
-                Ok(s) => s,
-                Err(e) => {
-                    eprintln!("Error: failed to read {}: {e}", args.spec_file.display());
-                    return ExitCode::from(2);
-                }
+            let (spec, _toml_dir, result) = match load_and_validate(&args.spec_file) {
+                EarlyReturn::Parsed(s, d, r) => (s, d, r),
+                EarlyReturn::Code(code) => return code,
             };
-
-            let spec = match makerpm::parse::parse_pkgspec(&toml_str) {
-                Ok(s) => s,
-                Err(e) => {
-                    let report = miette::Report::new(e);
-                    eprintln!("{report:?}");
-                    return ExitCode::from(1);
-                }
-            };
-
-            let toml_dir = args
-                .spec_file
-                .parent()
-                .unwrap_or_else(|| std::path::Path::new("."));
-
-            let result = makerpm::validate::validate(&spec, toml_dir);
 
             let has_errors = result.has_errors();
             for diag in &result.diagnostics {
@@ -105,29 +104,11 @@ fn main() -> ExitCode {
         }
 
         makerpm::cli::Commands::Fetch(args) => {
-            let toml_str = match std::fs::read_to_string(&args.spec_file) {
-                Ok(s) => s,
-                Err(e) => {
-                    eprintln!("Error: failed to read {}: {e}", args.spec_file.display());
-                    return ExitCode::from(2);
-                }
+            let (spec, toml_dir, result) = match load_and_validate(&args.spec_file) {
+                EarlyReturn::Parsed(s, d, r) => (s, d, r),
+                EarlyReturn::Code(code) => return code,
             };
 
-            let spec = match makerpm::parse::parse_pkgspec(&toml_str) {
-                Ok(s) => s,
-                Err(e) => {
-                    let report = miette::Report::new(e);
-                    eprintln!("{report:?}");
-                    return ExitCode::from(1);
-                }
-            };
-
-            let toml_dir = args
-                .spec_file
-                .parent()
-                .unwrap_or_else(|| std::path::Path::new("."));
-
-            let result = makerpm::validate::validate(&spec, toml_dir);
             let has_errors = result.has_errors();
             for diag in &result.diagnostics {
                 eprintln!("{diag:?}");
@@ -154,7 +135,7 @@ fn main() -> ExitCode {
 
             let downloader = makerpm::fetch::UreqDownloader;
 
-            match makerpm::fetch::fetch_sources(&spec, toml_dir, &opts, &downloader) {
+            match makerpm::fetch::fetch_sources(&spec, &toml_dir, &opts, &downloader) {
                 Ok(resolved) => {
                     let downloaded = resolved.iter().filter(|r| r.was_download).count();
                     let cached = resolved.iter().filter(|r| !r.was_download).count();
@@ -174,29 +155,11 @@ fn main() -> ExitCode {
         }
 
         makerpm::cli::Commands::Build(args) => {
-            let toml_str = match std::fs::read_to_string(&args.spec_file) {
-                Ok(s) => s,
-                Err(e) => {
-                    eprintln!("Error: failed to read {}: {e}", args.spec_file.display());
-                    return ExitCode::from(2);
-                }
+            let (spec, toml_dir, result) = match load_and_validate(&args.spec_file) {
+                EarlyReturn::Parsed(s, d, r) => (s, d, r),
+                EarlyReturn::Code(code) => return code,
             };
 
-            let spec = match makerpm::parse::parse_pkgspec(&toml_str) {
-                Ok(s) => s,
-                Err(e) => {
-                    let report = miette::Report::new(e);
-                    eprintln!("{report:?}");
-                    return ExitCode::from(1);
-                }
-            };
-
-            let toml_dir = args
-                .spec_file
-                .parent()
-                .unwrap_or_else(|| std::path::Path::new("."));
-
-            let result = makerpm::validate::validate(&spec, toml_dir);
             let has_errors = result.has_errors();
             for diag in &result.diagnostics {
                 eprintln!("{diag:?}");
@@ -233,7 +196,7 @@ fn main() -> ExitCode {
 
             let resolved = match makerpm::fetch::fetch_sources(
                 &spec,
-                toml_dir,
+                &toml_dir,
                 &fetch_opts,
                 &downloader,
             ) {
@@ -255,7 +218,7 @@ fn main() -> ExitCode {
 
             let topdir = match makerpm::build_tree::setup_build_tree(
                 &spec,
-                toml_dir,
+                &toml_dir,
                 &resolved,
                 &rendered,
             ) {
@@ -279,7 +242,7 @@ fn main() -> ExitCode {
                         eprintln!("\n--- rpmbuild stderr tail ---\n{stderr_tail}");
                     }
                 }
-                let _ = makerpm::build_tree::clean_build_tree(toml_dir);
+                eprintln!("build tree preserved at: {}", topdir.display());
                 return ExitCode::from(1);
             }
 
@@ -301,12 +264,12 @@ fn main() -> ExitCode {
                 }
                 Err(e) => {
                     eprintln!("Error collecting artifacts: {e}");
-                    let _ = makerpm::build_tree::clean_build_tree(toml_dir);
+                    let _ = makerpm::build_tree::clean_build_tree(&toml_dir);
                     return ExitCode::from(1);
                 }
             }
 
-            let _ = makerpm::build_tree::clean_build_tree(toml_dir);
+            let _ = makerpm::build_tree::clean_build_tree(&toml_dir);
             ExitCode::SUCCESS
         }
 
@@ -353,17 +316,26 @@ date = "{date}"
 packager = "Your Name <you@example.com>"
 entries = ["Initial package"]
 "#,
-                date = chrono_date_now(),
+                date = today_utc(),
             );
 
             let path = std::path::PathBuf::from("PKGSPEC.toml");
-            match std::fs::write(&path, &toml_content) {
-                Ok(()) => {
+            match std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&path)
+            {
+                Ok(mut file) => {
+                    use std::io::Write;
+                    if let Err(e) = file.write_all(toml_content.as_bytes()) {
+                        eprintln!("Error: failed to write {}: {e}", path.display());
+                        return ExitCode::from(1);
+                    }
                     eprintln!("created {}", path.display());
                     ExitCode::SUCCESS
                 }
                 Err(e) => {
-                    eprintln!("Error: failed to write {}: {e}", path.display());
+                    eprintln!("Error: failed to create {}: {e}", path.display());
                     ExitCode::from(1)
                 }
             }
@@ -371,8 +343,8 @@ entries = ["Initial package"]
     }
 }
 
-fn chrono_date_now() -> String {
+fn today_utc() -> String {
     let now = time::OffsetDateTime::now_utc();
-    let format = time::format_description::parse_owned::<1>("[year]-[month]-[day]").unwrap();
-    now.format(&format).unwrap()
+    let format = time::macros::format_description!("[year]-[month]-[day]");
+    now.format(format).unwrap()
 }

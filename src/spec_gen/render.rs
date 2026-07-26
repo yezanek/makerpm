@@ -149,7 +149,6 @@ fn rpm_escape_filter(
     }
 }
 
-#[allow(deprecated)]
 fn rpm_date_filter(
     value: &tera::Value,
     _args: &std::collections::HashMap<String, tera::Value>,
@@ -159,21 +158,19 @@ fn rpm_date_filter(
         _ => return Ok(value.clone()),
     };
 
-    let date_fmt =
-        time::format_description::parse("[year]-[month]-[day]")
-            .map_err(|e| tera::Error::msg(format!("invalid date format: {e}")))?;
+    let date_fmt = time::macros::format_description!("[year]-[month]-[day]");
 
-    let display_fmt =
-        time::format_description::parse("[weekday repr:short] [month repr:short] [day padding:space] [year]")
-            .map_err(|e| tera::Error::msg(format!("invalid display format: {e}")))?;
+    let display_fmt = time::macros::format_description!(
+        "[weekday repr:short] [month repr:short] [day padding:space] [year]"
+    );
 
-    let date = time::Date::parse(s, &date_fmt)
+    let date = time::Date::parse(s, date_fmt)
         .map_err(|_| tera::Error::msg(format!("failed to parse date: \"{s}\"")))?;
 
     let dt = time::PrimitiveDateTime::new(date, time::Time::MIDNIGHT);
 
     let formatted = dt
-        .format(&display_fmt)
+        .format(display_fmt)
         .map_err(|e| tera::Error::msg(format!("failed to format date: {e}")))?;
 
     Ok(tera::Value::String(formatted))

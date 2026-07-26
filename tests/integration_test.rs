@@ -78,9 +78,11 @@ fn build_remote_source_end_to_end() {
 }
 
 #[test]
-#[ignore = "requires rpmbuild"]
 fn build_failure_surfaces_rpmbuild_error() {
     let tmp = tempfile::tempdir().unwrap();
+    let source_path = tmp.path().join("data.txt");
+    std::fs::write(&source_path, b"content").unwrap();
+
     let broken_toml = r#"
 [package]
 name = "broken-pkg"
@@ -88,7 +90,7 @@ version = "1.0"
 summary = "Broken"
 license = "MIT"
 description = "This package will fail to build."
-sources = ["nonexistent.tar.gz"]
+sources = ["data.txt"]
 
 [package.files]
 paths = ["/usr/bin/nope"]
@@ -111,13 +113,12 @@ paths = ["/usr/bin/nope"]
 #[test]
 fn init_creates_valid_pkgspec() {
     let tmp = tempfile::tempdir().unwrap();
-    let orig_dir = std::env::current_dir().unwrap();
-    std::env::set_current_dir(tmp.path()).unwrap();
 
     makerpm()
         .arg("init")
         .arg("--name")
         .arg("test-pkg")
+        .current_dir(tmp.path())
         .assert()
         .success();
 
@@ -139,6 +140,4 @@ fn init_creates_valid_pkgspec() {
             .map(|d| format!("{d}"))
             .collect::<Vec<_>>()
     );
-
-    std::env::set_current_dir(&orig_dir).unwrap();
 }

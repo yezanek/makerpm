@@ -50,6 +50,7 @@ pub fn validate(spec: &PkgSpecFile, toml_dir: &Path) -> ValidationResult {
     validate_subpackages(spec, &mut diagnostics);
     validate_suffixes(spec, &mut diagnostics);
     inject_build_requires(spec, &mut injected_build_deps);
+    validate_extra_args_with_no_macros(spec, &mut diagnostics);
     validate_test_defaults(spec, &mut diagnostics);
     validate_changelog(spec, &mut diagnostics);
     validate_file_overlap(spec, &mut diagnostics);
@@ -94,11 +95,23 @@ fn validate_sources(spec: &PkgSpecFile, toml_dir: &Path, diags: &mut Vec<Report>
 
     for (raw, kind) in all_sources {
         if let SourceEntry::Local { filename } = source_spec::parse_source_entry(raw) {
+            if filename.is_empty() {
+                diags.push(error(format!(
+                    "local {kind} has an empty filename"
+                )));
+                continue;
+            }
             let path = toml_dir.join(&filename);
             if !path.exists() {
                 diags.push(error(format!(
                     "local {kind} file not found: \"{filename}\" \
                      (expected at {})",
+                    path.display()
+                )));
+            } else if !path.is_file() {
+                diags.push(error(format!(
+                    "local {kind} path is not a regular file: \"{filename}\" \
+                     (at {})",
                     path.display()
                 )));
             }
@@ -137,6 +150,18 @@ fn validate_unverified_sources(spec: &PkgSpecFile, diags: &mut Vec<Report>) -> b
             if checksum.is_none() || checksum == Some("SKIP") {
                 diags.push(warning(format!(
                     "remote source \"{filename}\" has no declared sha256sums entry; \
+                     consider adding a checksum for verification"
+                )));
+                found = true;
+            }
+        }
+    }
+    for (i, raw) in spec.package.patches.iter().enumerate() {
+        if let SourceEntry::Remote { filename, .. } = source_spec::parse_source_entry(raw) {
+            let checksum = spec.package.patch_sha256sums.get(i).map(String::as_str);
+            if checksum.is_none() || checksum == Some("SKIP") {
+                diags.push(warning(format!(
+                    "remote patch \"{filename}\" has no declared patch_sha256sums entry; \
                      consider adding a checksum for verification"
                 )));
                 found = true;
@@ -192,6 +217,23 @@ fn inject_build_requires(spec: &PkgSpecFile, injected: &mut Vec<String>) {
     for req in system.required_build_requires() {
         if !spec.package.deps.build_depends.iter().any(|d| d == req) {
             injected.push(req.to_string());
+        }
+    }
+}
+
+fn validate_extra_args_with_no_macros(spec: &PkgSpecFile, diags: &mut Vec<Report>) {
+    if spec.package.build.system.macros().is_none() {
+        if !spec.package.build.extra_build_args.is_empty() {
+            diags.push(warning(
+                "extra_build_args is set but the build system has no macros to apply them to; \
+                 the args will be ignored",
+            ));
+        }
+        if !spec.package.build.extra_install_args.is_empty() {
+            diags.push(warning(
+                "extra_install_args is set but the build system has no macros to apply them to; \
+                 the args will be ignored",
+            ));
         }
     }
 }

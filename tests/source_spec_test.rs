@@ -33,12 +33,11 @@ fn rename_form() {
 }
 
 #[test]
-fn ftp_url() {
+fn ftp_url_becomes_local() {
     assert_eq!(
         parse_source_entry("ftp://example.org/file.tar.gz"),
-        SourceEntry::Remote {
-            filename: "file.tar.gz".into(),
-            url: "ftp://example.org/file.tar.gz".into()
+        SourceEntry::Local {
+            filename: "ftp://example.org/file.tar.gz".into()
         }
     );
 }

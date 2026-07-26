@@ -6,6 +6,43 @@ use crate::model::PkgSpecFile;
 
 const RPM_DIRS: &[&str] = &["BUILD", "BUILDROOT", "RPMS", "SOURCES", "SPECS", "SRPMS"];
 
+fn validate_single_component(name: &str, context: &str) -> Result<(), MakerpmError> {
+    if name.is_empty() {
+        return Err(MakerpmError::Io {
+            path: PathBuf::new(),
+            source: std::io::Error::other(format!("{context} must not be empty")),
+        });
+    }
+    let path = Path::new(name);
+    let mut components = path.components();
+    match components.next() {
+        None => {
+            return Err(MakerpmError::Io {
+                path: PathBuf::new(),
+                source: std::io::Error::other(format!("{context} is empty: \"{name}\"")),
+            });
+        }
+        Some(std::path::Component::Normal(_)) => {}
+        Some(_) => {
+            return Err(MakerpmError::Io {
+                path: PathBuf::new(),
+                source: std::io::Error::other(format!(
+                    "{context} contains path traversal or is absolute: \"{name}\""
+                )),
+            });
+        }
+    }
+    if components.next().is_some() {
+        return Err(MakerpmError::Io {
+            path: PathBuf::new(),
+            source: std::io::Error::other(format!(
+                "{context} contains path separators: \"{name}\""
+            )),
+        });
+    }
+    Ok(())
+}
+
 /// Set up the rpmbuild tree layout and stage sources + spec.
 ///
 /// Creates `.makerpm/` next to the PKGSPEC.toml as the `_topdir`.
@@ -27,6 +64,7 @@ pub fn setup_build_tree(
     }
 
     for source in resolved_sources {
+        validate_single_component(&source.filename, "source filename")?;
         let dest = topdir.join("SOURCES").join(&source.filename);
         std::fs::copy(&source.local_path, &dest).map_err(|e| MakerpmError::Io {
             path: dest,
@@ -34,6 +72,7 @@ pub fn setup_build_tree(
         })?;
     }
 
+    validate_single_component(&spec.package.name, "package name")?;
     let spec_filename = format!("{}.spec", spec.package.name);
     let spec_path = topdir.join("SPECS").join(&spec_filename);
     std::fs::write(&spec_path, rendered_spec).map_err(|e| MakerpmError::Io {

@@ -11,10 +11,15 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
+    /// Validate a PKGSPEC.toml without building or fetching
     Validate(ValidateArgs),
+    /// Render the RPM spec file from a PKGSPEC.toml
     Spec(SpecArgs),
+    /// Download remote sources declared in the spec
     Fetch(FetchArgs),
+    /// Build RPMs from a PKGSPEC.toml
     Build(BuildArgs),
+    /// Scaffold a new PKGSPEC.toml in the current directory
     Init(InitArgs),
 }
 

@@ -79,11 +79,14 @@ fn fetch_fails_without_allow_unverified() {
 
 #[test]
 fn fetch_with_allow_unverified_passes_validation_gate() {
+    let cache_dir = tempfile::tempdir().unwrap();
     let output = makerpm()
         .arg("fetch")
         .arg("--spec-file")
         .arg("tests/fixtures/warn_unverified_source.toml")
         .arg("--allow-unverified")
+        .arg("--offline")
+        .env("MAKERPM_SRCDEST", cache_dir.path())
         .output()
         .unwrap();
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -92,7 +95,7 @@ fn fetch_with_allow_unverified_passes_validation_gate() {
         "should pass validation gate, got: {stderr}"
     );
     assert!(
-        output.status.code() != Some(1) || stderr.contains("download"),
-        "should fail on download, not validation gate: {stderr}"
+        stderr.contains("download") || stderr.contains("uncached") || !output.status.success(),
+        "should fail on download/uncached, not validation gate: {stderr}"
     );
 }

@@ -115,8 +115,6 @@ version = "1.0"
 summary = "Base package"
 license = "MIT"
 description = "Scriptlets without -n flag."
-is_base = true
-
 [package.files]
 paths = ["/usr/bin/base-noflags"]
 
