@@ -26,14 +26,14 @@ pub enum Commands {
 #[derive(clap::Args)]
 pub struct ValidateArgs {
     /// Path to PKGSPEC.toml
-    #[arg(long, default_value = "PKGSPEC.toml")]
+    #[arg(short, long, default_value = "PKGSPEC.toml")]
     pub spec_file: PathBuf,
 }
 
 #[derive(clap::Args)]
 pub struct SpecArgs {
     /// Path to PKGSPEC.toml
-    #[arg(long, default_value = "PKGSPEC.toml")]
+    #[arg(short, long, default_value = "PKGSPEC.toml")]
     pub spec_file: PathBuf,
 
     /// Output file path (prints to stdout if omitted)
@@ -44,7 +44,7 @@ pub struct SpecArgs {
 #[derive(clap::Args)]
 pub struct FetchArgs {
     /// Path to PKGSPEC.toml
-    #[arg(long, default_value = "PKGSPEC.toml")]
+    #[arg(short, long, default_value = "PKGSPEC.toml")]
     pub spec_file: PathBuf,
 
     #[command(flatten)]
@@ -54,11 +54,11 @@ pub struct FetchArgs {
 #[derive(clap::Args)]
 pub struct BuildArgs {
     /// Path to PKGSPEC.toml
-    #[arg(long, default_value = "PKGSPEC.toml")]
+    #[arg(short, long, default_value = "PKGSPEC.toml")]
     pub spec_file: PathBuf,
 
     /// Output directory for built RPMs (default: ./rpms/)
-    #[arg(long)]
+    #[arg(short = 'd', long)]
     pub output_dir: Option<PathBuf>,
 
     #[command(flatten)]
@@ -68,25 +68,25 @@ pub struct BuildArgs {
 #[derive(clap::Args)]
 pub struct InitArgs {
     /// Package name (defaults to current directory name)
-    #[arg(long)]
+    #[arg(short, long)]
     pub name: Option<String>,
 }
 
 #[derive(clap::Args)]
 pub struct FetchFlags {
     /// Never touch the network; fail if an uncached remote source is needed
-    #[arg(long)]
+    #[arg(short = 'O', long)]
     pub offline: bool,
 
     /// Ignore cache and re-download every remote source
-    #[arg(long)]
+    #[arg(short, long)]
     pub refetch: bool,
 
     /// Proceed on checksum mismatch with a warning
-    #[arg(long)]
+    #[arg(short = 'k', long)]
     pub skip_checksums: bool,
 
     /// Proceed past unverified-source warnings without prompting (CI mode)
-    #[arg(long)]
+    #[arg(short = 'u', long)]
     pub allow_unverified: bool,
 }
