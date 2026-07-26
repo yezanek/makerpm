@@ -27,6 +27,7 @@ fn error(message: impl std::fmt::Display) -> Report {
 pub struct ValidationResult {
     pub diagnostics: Vec<Report>,
     pub injected_build_deps: Vec<String>,
+    pub has_unverified_sources: bool,
 }
 
 impl ValidationResult {
@@ -45,7 +46,7 @@ pub fn validate(spec: &PkgSpecFile, toml_dir: &Path) -> ValidationResult {
     validate_license(&spec.package.license, &mut diagnostics);
     validate_sources(spec, toml_dir, &mut diagnostics);
     validate_sha256_lengths(spec, &mut diagnostics);
-    validate_unverified_sources(spec, &mut diagnostics);
+    let has_unverified = validate_unverified_sources(spec, &mut diagnostics);
     validate_subpackages(spec, &mut diagnostics);
     validate_suffixes(spec, &mut diagnostics);
     inject_build_requires(spec, &mut injected_build_deps);
@@ -56,6 +57,7 @@ pub fn validate(spec: &PkgSpecFile, toml_dir: &Path) -> ValidationResult {
     ValidationResult {
         diagnostics,
         injected_build_deps,
+        has_unverified_sources: has_unverified,
     }
 }
 
@@ -127,7 +129,8 @@ fn validate_sha256_lengths(spec: &PkgSpecFile, diags: &mut Vec<Report>) {
     }
 }
 
-fn validate_unverified_sources(spec: &PkgSpecFile, diags: &mut Vec<Report>) {
+fn validate_unverified_sources(spec: &PkgSpecFile, diags: &mut Vec<Report>) -> bool {
+    let mut found = false;
     for (i, raw) in spec.package.sources.iter().enumerate() {
         if let SourceEntry::Remote { filename, .. } = source_spec::parse_source_entry(raw) {
             let checksum = spec.package.sha256sums.get(i).map(String::as_str);
@@ -136,9 +139,11 @@ fn validate_unverified_sources(spec: &PkgSpecFile, diags: &mut Vec<Report>) {
                     "remote source \"{filename}\" has no declared sha256sums entry; \
                      consider adding a checksum for verification"
                 )));
+                found = true;
             }
         }
     }
+    found
 }
 
 fn validate_subpackages(spec: &PkgSpecFile, diags: &mut Vec<Report>) {

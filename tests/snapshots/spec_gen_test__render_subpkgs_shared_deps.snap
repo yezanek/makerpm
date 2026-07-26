@@ -11,6 +11,7 @@ Release:        1%{?dist}
 Summary:        A shared-dependency test package
 License:        ISC
 Source0:       libsodium-test-1.0.19.tar.gz
+BuildRequires:  cmake
 
 
 %description
@@ -19,7 +20,6 @@ A package demonstrating subpackages sharing dependencies.
 %package        devel
 Summary:        Development files for libsodium-test
 License:        ISC
-BuildRequires:  cmake
 Requires:       libsodium-test
 
 %description    devel

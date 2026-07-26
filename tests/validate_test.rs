@@ -171,3 +171,63 @@ patch_sha256sums = ["abc", "def"]
         "patch_sha256sums has 2 entries but patches has 1"
     ));
 }
+
+#[test]
+fn subpackage_build_deps_detected_in_validation() {
+    let toml_str = r#"
+[package]
+name = "subpkg-build"
+version = "1.0"
+summary = "Package with subpackage build deps"
+license = "MIT"
+description = "Tests subpackage build deps."
+
+[package.files]
+paths = ["/usr/bin/subpkg-build"]
+
+[[subpackage]]
+suffix = "devel"
+summary = "Devel"
+description = "Dev files."
+files.paths = ["/usr/include/subpkg-build/"]
+
+[subpackage.deps]
+build_depends = ["cmake"]
+"#;
+    let spec = parse_pkgspec(toml_str).unwrap();
+    let result = validate(&spec, Path::new("."));
+    assert!(!result.has_errors());
+}
+
+#[test]
+fn has_unverified_sources_flag_set() {
+    let toml_str = r#"
+[package]
+name = "unverified"
+version = "1.0"
+summary = "Unverified remote source"
+license = "MIT"
+description = "Remote source without checksum."
+sources = ["https://example.org/file.tar.gz"]
+"#;
+    let spec = parse_pkgspec(toml_str).unwrap();
+    let result = validate(&spec, Path::new("."));
+    assert!(result.has_unverified_sources);
+}
+
+#[test]
+fn no_unverified_sources_when_checksums_present() {
+    let toml_str = r#"
+[package]
+name = "verified"
+version = "1.0"
+summary = "Verified remote source"
+license = "MIT"
+description = "Remote source with checksum."
+sources = ["https://example.org/file.tar.gz"]
+sha256sums = ["9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a00"]
+"#;
+    let spec = parse_pkgspec(toml_str).unwrap();
+    let result = validate(&spec, Path::new("."));
+    assert!(!result.has_unverified_sources);
+}

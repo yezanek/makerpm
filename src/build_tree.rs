@@ -27,16 +27,7 @@ pub fn setup_build_tree(
     }
 
     for source in resolved_sources {
-        let filename = source.local_path.file_name().ok_or_else(|| {
-            MakerpmError::Io {
-                path: source.local_path.clone(),
-                source: std::io::Error::new(
-                    std::io::ErrorKind::InvalidFilename,
-                    "source path has no filename component",
-                ),
-            }
-        })?;
-        let dest = topdir.join("SOURCES").join(filename);
+        let dest = topdir.join("SOURCES").join(&source.filename);
         std::fs::copy(&source.local_path, &dest).map_err(|e| MakerpmError::Io {
             path: dest,
             source: e,
@@ -104,6 +95,7 @@ mod tests {
         let spec = make_spec();
         let resolved = vec![ResolvedSource {
             local_path: tmp.path().join("data.txt"),
+            filename: "data.txt".to_string(),
             was_download: false,
         }];
         std::fs::write(tmp.path().join("data.txt"), b"hello").unwrap();
@@ -122,6 +114,7 @@ mod tests {
         let spec = make_spec();
         let resolved = vec![ResolvedSource {
             local_path: tmp.path().join("data.txt"),
+            filename: "data.txt".to_string(),
             was_download: false,
         }];
         std::fs::write(tmp.path().join("data.txt"), b"content").unwrap();

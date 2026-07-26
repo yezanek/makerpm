@@ -95,15 +95,7 @@ impl BuildSystem {
     }
 
     pub fn extra_build_args_string(&self, args: &[String]) -> String {
-        if args.is_empty() {
-            return String::new();
-        }
-        match self {
-            BuildSystem::Autotools | BuildSystem::Cmake | BuildSystem::Meson => {
-                args.join(" ")
-            }
-            _ => args.join(" "),
-        }
+        args.join(" ")
     }
 
     pub fn extra_install_args_string(&self, args: &[String]) -> String {

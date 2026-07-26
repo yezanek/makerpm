@@ -97,6 +97,28 @@ fn cache_path_for(cache_dir: &Path, filename: &str) -> PathBuf {
     cache_dir.join(filename)
 }
 
+fn validate_cache_filename(filename: &str) -> Result<(), MakerpmError> {
+    if filename.is_empty() || filename == "." || filename == ".." {
+        return Err(MakerpmError::Fetch {
+            url: String::new(),
+            source: Box::new(std::io::Error::other(format!(
+                "invalid source filename: \"{filename}\""
+            ))),
+        });
+    }
+    for component in std::path::Path::new(filename).components() {
+        if matches!(component, std::path::Component::ParentDir) {
+            return Err(MakerpmError::Fetch {
+                url: String::new(),
+                source: Box::new(std::io::Error::other(format!(
+                    "source filename contains path traversal: \"{filename}\""
+                ))),
+            });
+        }
+    }
+    Ok(())
+}
+
 /// Compute the SHA-256 hex digest of a file.
 pub fn compute_sha256(path: &Path) -> Result<String, MakerpmError> {
     let mut file = std::fs::File::open(path).map_err(|e| MakerpmError::Io {
@@ -135,6 +157,7 @@ pub struct FetchOptions {
 #[derive(Debug)]
 pub struct ResolvedSource {
     pub local_path: PathBuf,
+    pub filename: String,
     pub was_download: bool,
 }
 
@@ -174,23 +197,29 @@ pub fn fetch_sources(
         match entry {
             SourceEntry::Local { filename } => {
                 let local_path = toml_dir.join(&filename);
+                let fn_clone = filename.clone();
                 results.push(ResolvedSource {
                     local_path,
+                    filename: fn_clone,
                     was_download: false,
                 });
             }
             SourceEntry::Remote { ref filename, ref url } => {
+                validate_cache_filename(filename)?;
                 let cache_path = cache_path_for(&opts.cache_dir, filename);
                 let declared_checksum = checksum_for(spec, &entry, idx);
 
                 // §8.2 algorithm: decide whether to download
+                let mut cached_hash: Option<String> = None;
                 let should_download = if opts.refetch || !cache_path.exists() {
                     true
                 } else if let Some(expected) = declared_checksum {
                     if expected != "SKIP" {
                         let actual = compute_sha256(&cache_path)?;
-                        actual != expected // §8.2 step 3c: mismatch → re-download
-                                           // §8.2 step 3b: match → reuse (false)
+                        let mismatch = actual != expected;
+                        cached_hash = Some(actual);
+                        mismatch // §8.2 step 3c: mismatch → re-download
+                                 // §8.2 step 3b: match → reuse (false)
                     } else {
                         false // SKIP checksum → reuse existing cache
                     }
@@ -213,12 +242,16 @@ pub fn fetch_sources(
                             source: e,
                         }
                     })?;
+                    cached_hash = None; // file changed, must re-hash
                 }
 
                 // §8.2 step 3e: verify checksum after download or cache hit
                 if let Some(expected) = declared_checksum {
                     if expected != "SKIP" {
-                        let actual = compute_sha256(&cache_path)?;
+                        let actual = match cached_hash {
+                            Some(h) => h,
+                            None => compute_sha256(&cache_path)?,
+                        };
                         if actual != expected {
                             if opts.skip_checksums {
                                 eprintln!(
@@ -238,6 +271,7 @@ pub fn fetch_sources(
 
                 results.push(ResolvedSource {
                     local_path: cache_path,
+                    filename: filename.clone(),
                     was_download: should_download,
                 });
             }
@@ -621,5 +655,26 @@ mod tests {
         assert_eq!(results.len(), 1);
         assert!(results[0].was_download);
         assert_eq!(dl.calls(), vec!["https://example.com/data.bin"]);
+    }
+
+    #[test]
+    fn validate_cache_filename_rejects_empty() {
+        assert!(validate_cache_filename("").is_err());
+    }
+
+    #[test]
+    fn validate_cache_filename_rejects_dot_dot() {
+        assert!(validate_cache_filename("..").is_err());
+    }
+
+    #[test]
+    fn validate_cache_filename_rejects_traversal() {
+        assert!(validate_cache_filename("foo/../../etc/passwd").is_err());
+    }
+
+    #[test]
+    fn validate_cache_filename_accepts_normal() {
+        assert!(validate_cache_filename("test.tar.gz").is_ok());
+        assert!(validate_cache_filename("foo-bar_1.0-1.x86_64.rpm").is_ok());
     }
 }

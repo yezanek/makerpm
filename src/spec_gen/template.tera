@@ -29,6 +29,15 @@ Requires:       {{ dep }}
 {%- for dep in recommends %}
 Recommends:     {{ dep }}
 {%- endfor %}
+{%- for dep in suggests %}
+Suggests:       {{ dep }}
+{%- endfor %}
+{%- for dep in supplements %}
+Supplements:    {{ dep }}
+{%- endfor %}
+{%- for dep in enhances %}
+Enhances:       {{ dep }}
+{%- endfor %}
 {%- for dep in conflicts %}
 Conflicts:      {{ dep }}
 {%- endfor %}
@@ -58,14 +67,20 @@ License:        {{ pkg.license }}
 {%- if pkg.url %}
 URL:            {{ pkg.url }}
 {%- endif %}
-{%- for dep in pkg.build_depends %}
-BuildRequires:  {{ dep }}
-{%- endfor %}
 {%- for dep in pkg.depends %}
 Requires:       {{ dep }}
 {%- endfor %}
 {%- for dep in pkg.recommends %}
 Recommends:     {{ dep }}
+{%- endfor %}
+{%- for dep in pkg.suggests %}
+Suggests:       {{ dep }}
+{%- endfor %}
+{%- for dep in pkg.supplements %}
+Supplements:    {{ dep }}
+{%- endfor %}
+{%- for dep in pkg.enhances %}
+Enhances:       {{ dep }}
 {%- endfor %}
 {%- for dep in pkg.conflicts %}
 Conflicts:      {{ dep }}
@@ -166,14 +181,28 @@ Obsoletes:      {{ dep }}
 {%- endfor %}
 {%- for pkg in renderables %}
 {%- if pkg.pretrans is string %}
+{%- if pkg.interpreter is string %}
+
+%pretrans -p {{ pkg.interpreter }}
+{{ pkg.pretrans }}
+{%- elif pkg.is_base %}
+
+%pretrans
+{{ pkg.pretrans }}
+{%- else %}
 
 %pretrans -n {{ pkg.name }}
 {{ pkg.pretrans }}
+{%- endif %}
 {%- endif %}
 {%- if pkg.pre is string %}
 {%- if pkg.interpreter is string %}
 
 %pre -p {{ pkg.interpreter }}
+{{ pkg.pre }}
+{%- elif pkg.is_base %}
+
+%pre
 {{ pkg.pre }}
 {%- else %}
 
@@ -186,6 +215,10 @@ Obsoletes:      {{ dep }}
 
 %post -p {{ pkg.interpreter }}
 {{ pkg.post }}
+{%- elif pkg.is_base %}
+
+%post
+{{ pkg.post }}
 {%- else %}
 
 %post -n {{ pkg.name }}
@@ -196,6 +229,10 @@ Obsoletes:      {{ dep }}
 {%- if pkg.interpreter is string %}
 
 %preun -p {{ pkg.interpreter }}
+{{ pkg.preun }}
+{%- elif pkg.is_base %}
+
+%preun
 {{ pkg.preun }}
 {%- else %}
 
@@ -208,6 +245,10 @@ Obsoletes:      {{ dep }}
 
 %postun -p {{ pkg.interpreter }}
 {{ pkg.postun }}
+{%- elif pkg.is_base %}
+
+%postun
+{{ pkg.postun }}
 {%- else %}
 
 %postun -n {{ pkg.name }}
@@ -218,6 +259,10 @@ Obsoletes:      {{ dep }}
 {%- if pkg.interpreter is string %}
 
 %posttrans -p {{ pkg.interpreter }}
+{{ pkg.posttrans }}
+{%- elif pkg.is_base %}
+
+%posttrans
 {{ pkg.posttrans }}
 {%- else %}
 

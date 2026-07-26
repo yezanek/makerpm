@@ -65,3 +65,34 @@ fn validate_nonexistent_file_exits_nonzero() {
         .failure()
         .stderr(predicate::str::contains("failed to read"));
 }
+
+#[test]
+fn fetch_fails_without_allow_unverified() {
+    makerpm()
+        .arg("fetch")
+        .arg("--spec-file")
+        .arg("tests/fixtures/warn_unverified_source.toml")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("unverified"));
+}
+
+#[test]
+fn fetch_with_allow_unverified_passes_validation_gate() {
+    let output = makerpm()
+        .arg("fetch")
+        .arg("--spec-file")
+        .arg("tests/fixtures/warn_unverified_source.toml")
+        .arg("--allow-unverified")
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        !stderr.contains("unverified"),
+        "should pass validation gate, got: {stderr}"
+    );
+    assert!(
+        output.status.code() != Some(1) || stderr.contains("download"),
+        "should fail on download, not validation gate: {stderr}"
+    );
+}

@@ -67,3 +67,105 @@ entries = ["Initial package with %percent signs"]
     let rendered = spec_gen::render(&spec, &[]).unwrap();
     insta::assert_snapshot!(rendered);
 }
+
+#[test]
+fn render_subpkg_build_deps() {
+    let spec = load_fixture("spec_subpkg_build_deps.toml");
+    let rendered = spec_gen::render(&spec, &[]).unwrap();
+    insta::assert_snapshot!(rendered);
+}
+
+#[test]
+fn render_supplements_enhances() {
+    let toml_str = r#"
+[package]
+name = "enhanced-pkg"
+version = "1.0"
+summary = "Enhanced package"
+license = "MIT"
+description = "Tests suggests/supplements/enhances."
+
+[package.deps]
+suggests = ["vim"]
+supplements = ["system-release"]
+enhances = ["vim-enhanced"]
+
+[package.files]
+paths = ["/usr/bin/enhanced-pkg"]
+
+[[package.changelog]]
+version = "1.0-1"
+date = "2026-07-26"
+packager = "Test User <test@example.org>"
+entries = ["Initial release"]
+"#;
+    let spec = parse_pkgspec(toml_str).unwrap();
+    let rendered = spec_gen::render(&spec, &[]).unwrap();
+    assert!(rendered.contains("Suggests:"));
+    assert!(rendered.contains("Supplements:"));
+    assert!(rendered.contains("Enhances:"));
+}
+
+#[test]
+fn render_base_pkg_no_scriptlet_n_flag() {
+    let toml_str = r##"
+[package]
+name = "base-noflags"
+version = "1.0"
+summary = "Base package"
+license = "MIT"
+description = "Scriptlets without -n flag."
+is_base = true
+
+[package.files]
+paths = ["/usr/bin/base-noflags"]
+
+[package.scriptlets]
+pre = "#!/bin/sh\necho pre"
+post = "#!/bin/sh\necho post"
+
+[[package.changelog]]
+version = "1.0-1"
+date = "2026-07-26"
+packager = "Test User <test@example.org>"
+entries = ["Initial release"]
+"##;
+    let spec = parse_pkgspec(toml_str).unwrap();
+    let rendered = spec_gen::render(&spec, &[]).unwrap();
+    assert!(rendered.contains("%pre\n"));
+    assert!(!rendered.contains("-n base-noflags"));
+}
+
+#[test]
+fn render_subpkg_pretrans_interpreter() {
+    let toml_str = r##"
+[package]
+name = "interp-pretrans"
+version = "1.0"
+summary = "Pretrans interpreter test"
+license = "MIT"
+description = "Tests pretrans with custom interpreter."
+
+[package.files]
+paths = ["/usr/bin/interp-pretrans"]
+
+[[subpackage]]
+suffix = "sub"
+summary = "Sub"
+description = "Sub."
+files.paths = ["/usr/bin/interp-sub"]
+
+[subpackage.scriptlets]
+interpreter = "/usr/bin/perl"
+pretrans = "#!/usr/bin/perl\nprint pretrans"
+
+[[package.changelog]]
+version = "1.0-1"
+date = "2026-07-26"
+packager = "Test User <test@example.org>"
+entries = ["Initial release"]
+"##;
+    let spec = parse_pkgspec(toml_str).unwrap();
+    let rendered = spec_gen::render(&spec, &[]).unwrap();
+    assert!(rendered.contains("%pretrans -p /usr/bin/perl\n"));
+}

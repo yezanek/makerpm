@@ -187,6 +187,13 @@ pub fn render(spec: &PkgSpecFile, injected_build_deps: &[String]) -> Result<Stri
         .deps
         .build_depends
         .to_vec();
+    for sub in &spec.subpackages {
+        for dep in &sub.deps.build_depends {
+            if !build_requires.contains(dep) {
+                build_requires.push(dep.clone());
+            }
+        }
+    }
     for dep in injected_build_deps {
         if !build_requires.contains(dep) {
             build_requires.push(dep.clone());
@@ -244,6 +251,9 @@ pub fn render(spec: &PkgSpecFile, injected_build_deps: &[String]) -> Result<Stri
     context.insert("build_requires", &build_requires);
     context.insert("requires", &spec.package.deps.depends);
     context.insert("recommends", &spec.package.deps.recommends);
+    context.insert("suggests", &spec.package.deps.suggests);
+    context.insert("supplements", &spec.package.deps.supplements);
+    context.insert("enhances", &spec.package.deps.enhances);
     context.insert("conflicts", &spec.package.deps.conflicts);
     context.insert("provides", &spec.package.deps.provides);
     context.insert("obsoletes", &spec.package.deps.obsoletes);
