@@ -1,0 +1,27 @@
+[package]
+name = "overlap"
+version = "1.0"
+summary = "Package with overlapping file paths"
+license = "MIT"
+description = "Two subpackages claim the same file path."
+
+[package.files]
+paths = ["%{_bindir}/foo"]
+
+[[subpackage]]
+suffix = "a"
+summary = "Part A"
+description = "Part A files."
+files.paths = ["%{_datadir}/shared.txt"]
+
+[[subpackage]]
+suffix = "b"
+summary = "Part B"
+description = "Part B files."
+files.paths = ["%{_datadir}/shared.txt"]
+
+[[package.changelog]]
+version = "1.0-1"
+date = "2026-06-29"
+packager = "Test <test@example.org>"
+entries = ["Initial"]

@@ -1,0 +1,24 @@
+[package]
+name = "dup-suffix"
+version = "1.0"
+summary = "Package with duplicate subpackage suffixes"
+license = "MIT"
+description = "Two subpackages share the same suffix."
+
+[[subpackage]]
+suffix = "devel"
+summary = "Development files"
+description = "Header files and static libraries."
+files.paths = ["%{_includedir}/foo"]
+
+[[subpackage]]
+suffix = "devel"
+summary = "Development files (copy)"
+description = "Duplicate suffix."
+files.paths = ["%{_libdir}/foo"]
+
+[[package.changelog]]
+version = "1.0-1"
+date = "2026-06-29"
+packager = "Test <test@example.org>"
+entries = ["Initial"]

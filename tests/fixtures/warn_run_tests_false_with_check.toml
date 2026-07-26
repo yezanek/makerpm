@@ -1,0 +1,18 @@
+[package]
+name = "test-contradiction"
+version = "1.0"
+summary = "Package with contradictory test settings"
+license = "MIT"
+description = "run_tests is false but check is set."
+
+[package.build]
+run_tests = false
+
+[package.build.steps]
+check = "make test"
+
+[[package.changelog]]
+version = "1.0-1"
+date = "2026-06-29"
+packager = "Test <test@example.org>"
+entries = ["Initial"]

@@ -1,0 +1,13 @@
+[package]
+name = "unverified"
+version = "1.0"
+summary = "Package with unverified remote source"
+license = "MIT"
+description = "Remote source without a sha256sums entry."
+sources = ["https://example.org/file.tar.gz"]
+
+[[package.changelog]]
+version = "1.0-1"
+date = "2026-06-29"
+packager = "Test <test@example.org>"
+entries = ["Initial"]

@@ -1,0 +1,52 @@
+[package]
+name = "myproject"
+version = "2.1.0"
+summary = "A cmake-based project"
+license = "Apache-2.0"
+url = "https://github.com/example/myproject"
+description = "myproject is a cmake-based project that does useful things."
+
+sources = ["https://github.com/example/myproject/archive/refs/tags/v2.1.0.tar.gz"]
+sha256sums = ["aa1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"]
+patches = ["fix-build.patch"]
+patch_sha256sums = ["bb1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"]
+
+[package.build]
+system = "cmake"
+extra_build_args = ["-DCMAKE_BUILD_TYPE=Release", "-DBUILD_TESTING=OFF"]
+
+[package.files]
+paths = ["%{_bindir}/myproject"]
+docs = ["README.md", "doc/"]
+licenses = ["LICENSE"]
+
+[[subpackage]]
+suffix = "devel"
+summary = "Development headers for myproject"
+description = "Contains header files for developing applications that use myproject."
+noarch = true
+
+[subpackage.files]
+paths = ["%{_includedir}/myproject/"]
+
+[[subpackage]]
+suffix = "doc"
+summary = "Documentation for myproject"
+description = "Contains man pages and API documentation for myproject."
+noarch = true
+
+[subpackage.files]
+paths = ["%{_mandir}/man1/myproject.1*"]
+docs = ["doc/myproject.pdf"]
+
+[[package.changelog]]
+version = "2.1.0-1"
+date = "2026-07-15"
+packager = "Jane Doe <jane@example.org>"
+entries = ["Update to version 2.1.0", "Fix build system issues"]
+
+[[package.changelog]]
+version = "2.0.0-1"
+date = "2026-06-01"
+packager = "Jane Doe <jane@example.org>"
+entries = ["Major rewrite of internal APIs"]

@@ -1,0 +1,44 @@
+---
+source: tests/spec_gen_test.rs
+assertion_line: 68
+expression: rendered
+---
+
+%global debug_package %{nil}
+Name:           escape-test
+Version:        1.0
+Release:        1%{?dist}
+Summary:        Tests percent escaping in descriptions
+License:        MIT
+
+
+%description
+This package uses %%{_libdir} and %%{name} macros in its description.
+
+%prep
+
+%setup -q
+
+
+
+%build
+
+%make_build
+
+
+%install
+
+%make_install
+
+
+
+%files
+
+%{_bindir}/escape-test
+
+%changelog
+
+* Wed Jul  1 2026 Test User <test@example.org>
+- 1.0-1
+
+- Initial package with %%percent signs

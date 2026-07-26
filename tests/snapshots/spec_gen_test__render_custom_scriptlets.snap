@@ -1,0 +1,60 @@
+---
+source: tests/spec_gen_test.rs
+assertion_line: 41
+expression: rendered
+---
+
+%global debug_package %{nil}
+Name:           myservice
+Version:        1.0.0
+Release:        1%{?dist}
+Summary:        A service with custom scriptlets
+License:        MIT
+Source0:       myservice-1.0.0.tar.gz
+
+
+%description
+myservice is a system service with custom pre/post installation scripts.
+
+%prep
+
+%setup -q
+
+
+
+%build
+
+%make_build
+
+
+%install
+
+%make_install
+
+
+
+%files
+
+%dir %{_sysconfdir}/myservice/
+
+%{_bindir}/myservice
+
+%config(noreplace) %{_sysconfdir}/myservice/config.toml
+
+%pre -p /bin/sh
+/usr/sbin/useradd -r -s /sbin/nologin myservice 2>/dev/null || :
+
+%post -p /bin/sh
+/usr/bin/systemctl daemon-reload
+
+%postun -p /bin/sh
+/usr/bin/systemctl daemon-reload
+
+%changelog
+
+* Sat Jul 25 2026 Test User <test@example.org>
+- 1.0.0-1
+
+- Initial package
+
+- Add systemd integration

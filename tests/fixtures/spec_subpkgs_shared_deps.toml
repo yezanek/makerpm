@@ -1,0 +1,46 @@
+[package]
+name = "libsodium-test"
+version = "1.0.19"
+summary = "A shared-dependency test package"
+license = "ISC"
+description = "A package demonstrating subpackages sharing dependencies."
+
+sources = ["https://example.org/libsodium-test-1.0.19.tar.gz"]
+sha256sums = ["cc1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"]
+
+[package.build]
+system = "make"
+
+[package.files]
+paths = ["%{_libdir}/libsodium-test.so.*"]
+licenses = ["COPYING"]
+
+[[subpackage]]
+suffix = "devel"
+summary = "Development files for libsodium-test"
+description = "Header files and static library for developing with libsodium-test."
+
+[subpackage.deps]
+depends = ["libsodium-test"]
+build_depends = ["cmake"]
+
+[subpackage.files]
+paths = ["%{_libdir}/libsodium-test.a", "%{_libdir}/pkgconfig/libsodium-test.pc"]
+docs = ["README.devel"]
+
+[[subpackage]]
+suffix = "static"
+summary = "Static library for libsodium-test"
+description = "Static library for libsodium-test, for statically linked builds."
+
+[subpackage.deps]
+depends = ["libsodium-test"]
+
+[subpackage.files]
+paths = ["%{_libdir}/libsodium-test.a"]
+
+[[package.changelog]]
+version = "1.0.19-1"
+date = "2026-07-20"
+packager = "Test User <test@example.org>"
+entries = ["Update to version 1.0.19"]

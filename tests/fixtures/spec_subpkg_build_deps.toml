@@ -1,0 +1,30 @@
+[package]
+name = "subpkg-build"
+version = "1.0"
+summary = "Package with subpackage build deps"
+license = "MIT"
+description = "Tests that subpackage build_depends merge into main BuildRequires."
+
+sources = ["https://example.org/subpkg-build-1.0.tar.gz"]
+sha256sums = ["aa1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"]
+
+[package.build]
+system = "make"
+
+[package.files]
+paths = ["%{_bindir}/subpkg-build"]
+
+[[subpackage]]
+suffix = "devel"
+summary = "Development files"
+description = "Header files and build support."
+files.paths = ["%{_includedir}/subpkg-build/"]
+
+[subpackage.deps]
+build_depends = ["cmake", "gcc-c++"]
+
+[[package.changelog]]
+version = "1.0-1"
+date = "2026-07-26"
+packager = "Test User <test@example.org>"
+entries = ["Initial package"]

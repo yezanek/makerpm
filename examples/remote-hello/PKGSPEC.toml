@@ -1,0 +1,30 @@
+[package]
+name = "remote-hello"
+version = "2.12"
+summary = "GNU Hello, the classic example package"
+license = "GPL-3.0-or-later"
+url = "https://www.gnu.org/software/hello/"
+description = """
+GNU Hello prints a friendly greeting.
+This package demonstrates makerpm's remote source fetching.
+"""
+
+sources = ["hello-2.12.tar.gz::https://ftp.gnu.org/gnu/hello/hello-2.12.tar.gz"]
+sha256sums = ["cf04af86dc085268c5f4470fbae49b18afbc221b78096aab842d934a76bad0ab"]
+
+[package.build]
+system = "autotools"
+extra_build_args = ["--disable-nls"]
+extra_install_args = ["MAKEINFO=true"]
+
+[package.build.steps]
+prep = "%setup -q -n hello-2.12"
+
+[package.files]
+paths = ["%{_bindir}/hello", "%{_mandir}/man1/hello.1.gz"]
+
+[[package.changelog]]
+version = "2.12-1"
+date = "2026-07-26"
+packager = "Test User <test@example.org>"
+entries = ["Packaged GNU hello 2.12 via makerpm"]

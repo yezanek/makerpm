@@ -1,0 +1,6 @@
+[package]
+name = "no-changelog"
+version = "1.0"
+summary = "Package with empty changelog"
+license = "MIT"
+description = "No changelog entries."

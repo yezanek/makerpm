@@ -1,0 +1,21 @@
+[package]
+name = "hello-world"
+version = "1.0"
+summary = "A friendly greeting program"
+license = "MIT"
+description = "hello-world prints a friendly greeting to standard output."
+sources = ["hello-world-1.0.tar.gz"]
+
+[package.build]
+system = "make"
+
+[package.files]
+paths = ["%{_bindir}/hello-world"]
+docs = ["README.md"]
+licenses = ["LICENSE"]
+
+[[package.changelog]]
+version = "1.0-1"
+date = "2026-07-26"
+packager = "Test User <test@example.org>"
+entries = ["Initial package"]

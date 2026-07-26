@@ -1,0 +1,58 @@
+---
+source: tests/spec_gen_test.rs
+assertion_line: 75
+expression: rendered
+---
+
+%global debug_package %{nil}
+Name:           subpkg-build
+Version:        1.0
+Release:        1%{?dist}
+Summary:        Package with subpackage build deps
+License:        MIT
+Source0:       subpkg-build-1.0.tar.gz
+BuildRequires:  cmake
+BuildRequires:  gcc-c++
+
+
+%description
+Tests that subpackage build_depends merge into main BuildRequires.
+
+%package        devel
+Summary:        Development files
+License:        MIT
+
+%description    devel
+Header files and build support.
+
+%prep
+
+%setup -q
+
+
+
+%build
+
+%make_build
+
+
+%install
+
+%make_install
+
+
+
+%files
+
+%{_bindir}/subpkg-build
+
+%files          devel
+
+%{_includedir}/subpkg-build/
+
+%changelog
+
+* Sun Jul 26 2026 Test User <test@example.org>
+- 1.0-1
+
+- Initial package

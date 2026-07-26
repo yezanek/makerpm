@@ -1,0 +1,17 @@
+[package]
+name = "incomplete-sub"
+version = "1.0"
+summary = "Package with incomplete subpackage"
+license = "MIT"
+description = "Subpackage has empty summary, description, and no files."
+
+[[subpackage]]
+suffix = "devel"
+summary = ""
+description = ""
+
+[[package.changelog]]
+version = "1.0-1"
+date = "2026-06-29"
+packager = "Test <test@example.org>"
+entries = ["Initial"]
