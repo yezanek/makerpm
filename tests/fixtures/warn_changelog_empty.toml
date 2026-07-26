@@ -1,0 +1,12 @@
+[package]
+name = "no-changelog"
+version = "1.0"
+summary = "Package with empty changelog"
+license = "MIT"
+description = "No changelog entries."
+
+[[package.changelog]]
+version = "1.0-1"
+date = "2026-06-29"
+packager = "Test <test@example.org>"
+entries = ["Initial"]
