@@ -14,6 +14,8 @@ pub enum Commands {
     Validate(ValidateArgs),
     Spec(SpecArgs),
     Fetch(FetchArgs),
+    Build(BuildArgs),
+    Init(InitArgs),
 }
 
 #[derive(clap::Args)]
@@ -42,6 +44,27 @@ pub struct FetchArgs {
 
     #[command(flatten)]
     pub fetch_flags: FetchFlags,
+}
+
+#[derive(clap::Args)]
+pub struct BuildArgs {
+    /// Path to PKGSPEC.toml
+    #[arg(long, default_value = "PKGSPEC.toml")]
+    pub spec_file: PathBuf,
+
+    /// Output directory for built RPMs (default: ./rpms/)
+    #[arg(long)]
+    pub output_dir: Option<PathBuf>,
+
+    #[command(flatten)]
+    pub fetch_flags: FetchFlags,
+}
+
+#[derive(clap::Args)]
+pub struct InitArgs {
+    /// Package name (defaults to current directory name)
+    #[arg(long)]
+    pub name: Option<String>,
 }
 
 #[derive(clap::Args)]

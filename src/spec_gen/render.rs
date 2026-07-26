@@ -5,6 +5,7 @@ use tera::{Context, Tera};
 use thiserror::Error;
 
 use crate::model::PkgSpecFile;
+use crate::source_spec;
 
 static TEMPLATE: LazyLock<Tera> = LazyLock::new(|| {
     let mut tera = Tera::default();
@@ -216,9 +217,28 @@ pub fn render(spec: &PkgSpecFile, injected_build_deps: &[String]) -> Result<Stri
     context.insert("noarch", &spec.package.noarch);
     context.insert("description", &spec.package.description);
 
-    context.insert("sources", &spec.package.sources);
+    let source_filenames: Vec<String> = spec
+        .package
+        .sources
+        .iter()
+        .map(|s| match source_spec::parse_source_entry(s) {
+            source_spec::SourceEntry::Local { filename } => filename,
+            source_spec::SourceEntry::Remote { filename, .. } => filename,
+        })
+        .collect();
+    let patch_filenames: Vec<String> = spec
+        .package
+        .patches
+        .iter()
+        .map(|s| match source_spec::parse_source_entry(s) {
+            source_spec::SourceEntry::Local { filename } => filename,
+            source_spec::SourceEntry::Remote { filename, .. } => filename,
+        })
+        .collect();
+
+    context.insert("sources", &source_filenames);
     context.insert("sha256sums", &spec.package.sha256sums);
-    context.insert("patches", &spec.package.patches);
+    context.insert("patches", &patch_filenames);
     context.insert("patch_sha256sums", &spec.package.patch_sha256sums);
 
     context.insert("build_requires", &build_requires);
@@ -236,6 +256,15 @@ pub fn render(spec: &PkgSpecFile, injected_build_deps: &[String]) -> Result<Stri
     context.insert("check_section", &check_section);
 
     context.insert("prep_steps", &spec.package.build.steps.prep);
+
+    let use_default_setup = match &spec.package.build.steps.prep {
+        Some(prep) => {
+            let lower = prep.to_lowercase();
+            !lower.contains("%setup") && !lower.contains("%autosetup")
+        }
+        None => true,
+    };
+    context.insert("use_default_setup", &use_default_setup);
 
     context.insert("changelog", &spec.package.changelog);
 

@@ -1,22 +1,25 @@
 ---
 source: tests/spec_gen_test.rs
+assertion_line: 41
 expression: rendered
 ---
 
+%global debug_package %{nil}
 Name:           myservice
 Version:        1.0.0
 Release:        1%{?dist}
 Summary:        A service with custom scriptlets
 License:        MIT
-Source0:       https://example.org/myservice-1.0.0.tar.gz
-Source0_sha256: dd1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
+Source0:       myservice-1.0.0.tar.gz
 
 
 %description
 myservice is a system service with custom pre/post installation scripts.
 
 %prep
-%autosetup
+
+%setup -q
+
 
 
 %build

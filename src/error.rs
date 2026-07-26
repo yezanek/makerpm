@@ -40,4 +40,11 @@ pub enum MakerpmError {
         #[source]
         source: std::io::Error,
     },
+
+    #[error("rpmbuild failed with exit code {exit_code}")]
+    #[diagnostic(severity(Error))]
+    RpmbuildFailed {
+        exit_code: i32,
+        stderr_tail: String,
+    },
 }

@@ -1,15 +1,16 @@
 ---
 source: tests/spec_gen_test.rs
+assertion_line: 34
 expression: rendered
 ---
 
+%global debug_package %{nil}
 Name:           libsodium-test
 Version:        1.0.19
 Release:        1%{?dist}
 Summary:        A shared-dependency test package
 License:        ISC
-Source0:       https://example.org/libsodium-test-1.0.19.tar.gz
-Source0_sha256: cc1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
+Source0:       libsodium-test-1.0.19.tar.gz
 
 
 %description
@@ -33,7 +34,9 @@ Requires:       libsodium-test
 Static library for libsodium-test, for statically linked builds.
 
 %prep
-%autosetup
+
+%setup -q
+
 
 
 %build
