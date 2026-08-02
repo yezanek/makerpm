@@ -837,6 +837,7 @@ dependencies = [
  "thiserror",
  "time",
  "toml",
+ "toml_edit",
  "tracing",
  "tracing-subscriber",
  "ureq",

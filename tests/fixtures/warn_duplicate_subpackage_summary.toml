@@ -1,0 +1,21 @@
+[package]
+name = "duplicate-summary"
+version = "1.0"
+summary = "A package with development files"
+license = "MIT"
+description = "The main package contains the runtime files."
+
+[package.files]
+paths = ["%{_bindir}/duplicate-summary"]
+
+[[subpackage]]
+suffix = "devel"
+summary = "A package with development files"
+description = "Headers and other development files."
+files.paths = ["%{_includedir}/duplicate-summary.h"]
+
+[[package.changelog]]
+version = "1.0-1"
+date = "2026-06-29"
+packager = "Test <test@example.org>"
+entries = ["Initial"]

@@ -7,11 +7,11 @@ enum EarlyReturn {
     Parsed(
         Box<makerpm::model::PkgSpecFile>,
         std::path::PathBuf,
-        makerpm::validate::ValidationResult,
+        makerpm::lint::LintResult,
     ),
 }
 
-fn load_and_validate(spec_file: &std::path::Path) -> EarlyReturn {
+fn load_and_lint(spec_file: &std::path::Path) -> EarlyReturn {
     let toml_str = match std::fs::read_to_string(spec_file) {
         Ok(s) => s,
         Err(e) => {
@@ -34,7 +34,7 @@ fn load_and_validate(spec_file: &std::path::Path) -> EarlyReturn {
         .unwrap_or_else(|| std::path::Path::new("."))
         .to_path_buf();
 
-    let result = makerpm::validate::validate(&spec, &toml_dir);
+    let result = makerpm::lint::lint(&spec, &toml_dir, &toml_str);
 
     EarlyReturn::Parsed(Box::new(spec), toml_dir, result)
 }
@@ -45,22 +45,21 @@ fn main() -> ExitCode {
     init_logging(verbosity);
 
     match cli.command {
-        makerpm::cli::Commands::Validate(args) => {
-            let (_spec, _toml_dir, result) = match load_and_validate(&args.spec_file) {
+        makerpm::cli::Commands::Lint(args) => {
+            let (_spec, _toml_dir, result) = match load_and_lint(&args.path) {
                 EarlyReturn::Parsed(s, d, r) => (s, d, r),
                 EarlyReturn::Code(code) => return code,
             };
 
-            if result.diagnostics.is_empty() {
+            if result.findings.is_empty() {
                 return ExitCode::SUCCESS;
             }
 
             let has_errors = result.has_errors();
-            for diag in &result.diagnostics {
-                eprintln!("{diag:?}");
-            }
+            let has_warnings = result.has_warnings();
+            print_findings(&result.findings);
 
-            if has_errors {
+            if has_errors || (args.strict && has_warnings) {
                 ExitCode::from(1)
             } else {
                 ExitCode::SUCCESS
@@ -68,15 +67,13 @@ fn main() -> ExitCode {
         }
 
         makerpm::cli::Commands::Spec(args) => {
-            let (spec, _toml_dir, result) = match load_and_validate(&args.spec_file) {
+            let (spec, _toml_dir, result) = match load_and_lint(&args.path) {
                 EarlyReturn::Parsed(s, d, r) => (s, d, r),
                 EarlyReturn::Code(code) => return code,
             };
 
             let has_errors = result.has_errors();
-            for diag in &result.diagnostics {
-                eprintln!("{diag:?}");
-            }
+            print_findings(&result.findings);
 
             if has_errors {
                 return ExitCode::from(1);
@@ -108,15 +105,13 @@ fn main() -> ExitCode {
         }
 
         makerpm::cli::Commands::Fetch(args) => {
-            let (spec, toml_dir, result) = match load_and_validate(&args.spec_file) {
+            let (spec, toml_dir, result) = match load_and_lint(&args.path) {
                 EarlyReturn::Parsed(s, d, r) => (s, d, r),
                 EarlyReturn::Code(code) => return code,
             };
 
             let has_errors = result.has_errors();
-            for diag in &result.diagnostics {
-                eprintln!("{diag:?}");
-            }
+            print_findings(&result.findings);
             if has_errors {
                 return ExitCode::from(1);
             }
@@ -158,15 +153,13 @@ fn main() -> ExitCode {
         }
 
         makerpm::cli::Commands::Build(args) => {
-            let (spec, toml_dir, result) = match load_and_validate(&args.spec_file) {
+            let (spec, toml_dir, result) = match load_and_lint(&args.path) {
                 EarlyReturn::Parsed(s, d, r) => (s, d, r),
                 EarlyReturn::Code(code) => return code,
             };
 
             let has_errors = result.has_errors();
-            for diag in &result.diagnostics {
-                eprintln!("{diag:?}");
-            }
+            print_findings(&result.findings);
             if has_errors {
                 return ExitCode::from(1);
             }
@@ -344,6 +337,67 @@ entries = ["Initial package"]
                 }
             }
         }
+
+        makerpm::cli::Commands::Import(args) => match args.command {
+            makerpm::cli::ImportCommands::Aur(args) => {
+                let draft = match makerpm::import::aur::import_pkgbuild(&args.pkgbuild) {
+                    Ok(draft) => draft,
+                    Err(error) => {
+                        eprintln!("Error: {error}");
+                        return ExitCode::from(1);
+                    }
+                };
+                let mut stderr = std::io::stderr().lock();
+                let result = makerpm::import::write_import_draft_and_report(
+                    &draft,
+                    &args.output,
+                    args.force,
+                    &mut stderr,
+                );
+                drop(stderr);
+                match result {
+                    Ok(_) => {
+                        eprintln!(
+                            "Note: AUR file lists and .install scriptlets were not imported; populate them after a test build."
+                        );
+                        ExitCode::SUCCESS
+                    }
+                    Err(error) => {
+                        eprintln!("Error: {error}");
+                        ExitCode::from(1)
+                    }
+                }
+            }
+            makerpm::cli::ImportCommands::Deb(args) => {
+                let draft = match makerpm::import::deb::import_debian_source(&args.source_dir) {
+                    Ok(draft) => draft,
+                    Err(error) => {
+                        eprintln!("Error: {error}");
+                        return ExitCode::from(1);
+                    }
+                };
+                let mut stderr = std::io::stderr().lock();
+                let result = makerpm::import::write_import_draft_and_report(
+                    &draft,
+                    &args.output,
+                    args.force,
+                    &mut stderr,
+                );
+                drop(stderr);
+                match result {
+                    Ok(_) => {
+                        eprintln!(
+                            "Note: Debian file lists were not imported; populate every files section after a test build."
+                        );
+                        ExitCode::SUCCESS
+                    }
+                    Err(error) => {
+                        eprintln!("Error: {error}");
+                        ExitCode::from(1)
+                    }
+                }
+            }
+        },
     }
 }
 
@@ -352,6 +406,28 @@ fn today_utc() -> String {
     let format = time::macros::format_description!("[year]-[month]-[day]");
     now.format(format)
         .expect("the static ISO date format is always valid")
+}
+
+fn print_findings(findings: &[makerpm::lint::LintFinding]) {
+    use makerpm::lint::Severity;
+
+    for (severity, heading) in [(Severity::Error, "Errors"), (Severity::Warning, "Warnings")] {
+        let matching = findings
+            .iter()
+            .filter(|finding| finding.severity == severity)
+            .collect::<Vec<_>>();
+        if matching.is_empty() {
+            continue;
+        }
+
+        eprintln!("{heading}:");
+        for finding in matching {
+            eprintln!("  {}: {}", finding.field_path, finding.message);
+            if let Some(suggestion) = &finding.suggestion {
+                eprintln!("    help: {suggestion}");
+            }
+        }
+    }
 }
 
 fn log_injected_dependencies(verbosity: u8, dependencies: &[String]) {

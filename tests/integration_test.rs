@@ -1,8 +1,8 @@
 use std::path::Path;
 
 use assert_cmd::Command;
+use makerpm::lint::lint;
 use makerpm::parse::parse_pkgspec;
-use makerpm::validate::validate;
 
 fn makerpm() -> Command {
     Command::cargo_bin("makerpm").unwrap()
@@ -16,7 +16,6 @@ fn build_hello_world_end_to_end() {
 
     makerpm()
         .arg("build")
-        .arg("--spec-file")
         .arg(&spec_path)
         .arg("--output-dir")
         .arg(output_dir.path())
@@ -51,7 +50,6 @@ fn build_remote_source_end_to_end() {
 
     makerpm()
         .arg("build")
-        .arg("--spec-file")
         .arg(&spec_path)
         .arg("--output-dir")
         .arg(output_dir.path())
@@ -102,7 +100,6 @@ paths = ["/usr/bin/nope"]
 
     makerpm()
         .arg("build")
-        .arg("--spec-file")
         .arg(&spec_path)
         .arg("--output-dir")
         .arg(&output_dir)
@@ -130,14 +127,14 @@ fn init_creates_valid_pkgspec() {
 
     assert_eq!(spec.package.name, "test-pkg");
 
-    let result = validate(&spec, tmp.path());
+    let result = lint(&spec, tmp.path(), &toml_str);
     assert!(
         !result.has_errors(),
         "init-created TOML should pass validation, got: {:?}",
         result
-            .diagnostics
+            .findings
             .iter()
-            .map(|d| format!("{d}"))
+            .map(|finding| &finding.message)
             .collect::<Vec<_>>()
     );
 }
