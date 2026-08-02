@@ -40,7 +40,7 @@ pub fn detect(source_dir: &Path, rules_text: Option<&str>) -> BuildDetection {
         ..BuildSpec::default()
     };
     for override_target in &overrides {
-        let placeholder = Some(String::new());
+        let placeholder = Some("# TODO: translate the detected debian/rules override".to_string());
         match override_target.step {
             "prep" => build.steps.prep = placeholder,
             "build" => build.steps.build = placeholder,
@@ -147,8 +147,20 @@ override_dh_auto_install: private prerequisite
                 }
             ]
         );
-        assert_eq!(detection.build.steps.prep, Some(String::new()));
-        assert_eq!(detection.build.steps.install, Some(String::new()));
+        assert!(detection
+            .build
+            .steps
+            .prep
+            .as_deref()
+            .unwrap()
+            .contains("TODO"));
+        assert!(detection
+            .build
+            .steps
+            .install
+            .as_deref()
+            .unwrap()
+            .contains("TODO"));
     }
 
     #[cfg(unix)]

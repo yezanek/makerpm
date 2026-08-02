@@ -16,7 +16,7 @@ pub fn split_dependencies(raw: &str) -> Vec<&str> {
 
 pub fn translate(dependency: &str) -> TranslatedDependency {
     let dependency = dependency.trim();
-    if dependency.contains('|') || dependency.contains('[') || dependency.contains('<') {
+    if dependency.contains('|') || dependency.contains('[') || dependency.contains(']') {
         return unsupported(dependency, "complex Debian dependency not translated");
     }
 
@@ -38,11 +38,7 @@ pub fn translate(dependency: &str) -> TranslatedDependency {
         Some((operator, version)) => format!("{translated_name} {operator} {version}"),
         None => translated_name.clone(),
     };
-    let confidence = if name_confidence == Confidence::Unsupported && constraint.is_some() {
-        Confidence::Confident
-    } else {
-        name_confidence
-    };
+    let confidence = name_confidence;
     let note = match (constraint, name_confidence) {
         (Some(_), Confidence::Unsupported) => {
             "version constraint translated mechanically; package name passed through unchanged"
@@ -138,7 +134,16 @@ mod tests {
 
         let constrained = translate("foo (>= 1.2)");
         assert_eq!(constrained.value, "foo >= 1.2");
-        assert_eq!(constrained.confidence, Confidence::Confident);
+        assert_eq!(constrained.confidence, Confidence::Unsupported);
+        assert!(constrained.note.contains("passed through unchanged"));
+
+        let upper_bound = translate("libfoo (<< 2.0)");
+        assert_eq!(upper_bound.value, "libfoo < 2.0");
+        assert_eq!(upper_bound.confidence, Confidence::Unsupported);
+
+        let qualified = translate("libfoo (>= 1.0) [amd64]");
+        assert_eq!(qualified.confidence, Confidence::Unsupported);
+        assert_eq!(qualified.value, "libfoo (>= 1.0) [amd64]");
     }
 
     #[test]

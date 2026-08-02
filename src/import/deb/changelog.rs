@@ -7,6 +7,7 @@ pub struct DebianChangelogEntry {
     pub version: String,
     pub maintainer: String,
     pub date: String,
+    pub date_normalization_failed: bool,
     pub entries: Vec<String>,
 }
 
@@ -79,11 +80,13 @@ pub fn parse(input: &str) -> Result<Vec<DebianChangelogEntry>, ChangelogError> {
         })?;
         let (maintainer, date) =
             parse_trailer(trailer).ok_or(ChangelogError::InvalidTrailer { line: trailer_line })?;
+        let (date, date_normalization_failed) = normalize_date(date);
         entries.push(DebianChangelogEntry {
             package,
             version,
             maintainer: maintainer.to_string(),
-            date: normalize_date(date),
+            date,
+            date_normalization_failed,
             entries: changes,
         });
     }
@@ -138,15 +141,16 @@ fn parse_trailer(line: &str) -> Option<(&str, &str)> {
     Some((maintainer.trim(), date.trim()))
 }
 
-fn normalize_date(date: &str) -> String {
-    time::OffsetDateTime::parse(date, &Rfc2822)
-        .map(|parsed| {
-            let format = time::macros::format_description!("[year]-[month]-[day]");
-            parsed
-                .format(format)
-                .expect("static ISO date format is valid")
-        })
-        .unwrap_or_else(|_| date.to_string())
+fn normalize_date(date: &str) -> (String, bool) {
+    match time::OffsetDateTime::parse(date, &Rfc2822).map(|parsed| {
+        let format = time::macros::format_description!("[year]-[month]-[day]");
+        parsed
+            .format(format)
+            .expect("static ISO date format is valid")
+    }) {
+        Ok(normalized) => (normalized, false),
+        Err(_) => (date.to_string(), true),
+    }
 }
 
 #[cfg(test)]
@@ -174,6 +178,7 @@ sample (1.3.0-1) stable; urgency=low
         assert_eq!(entries.len(), 2);
         assert_eq!(entries[0].version, "2:1.4.0~rc1-3");
         assert_eq!(entries[0].date, "2026-08-02");
+        assert!(!entries[0].date_normalization_failed);
         assert_eq!(
             entries[0].entries,
             [
@@ -182,6 +187,15 @@ sample (1.3.0-1) stable; urgency=low
             ]
         );
         assert_eq!(entries[1].maintainer, "John Doe <john@example.org>");
+    }
+
+    #[test]
+    fn preserves_and_flags_dates_that_cannot_be_normalized() {
+        let entries =
+            parse(&CHANGELOG.replace("Sun, 02 Aug 2026 12:34:56 +0200", "not an RFC 2822 date"))
+                .unwrap();
+        assert_eq!(entries[0].date, "not an RFC 2822 date");
+        assert!(entries[0].date_normalization_failed);
     }
 
     #[test]

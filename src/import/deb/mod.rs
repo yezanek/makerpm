@@ -181,6 +181,18 @@ pub fn import_debian_source(source_dir: &Path) -> Result<ImportDraft, DebImportE
     let files = placeholder_files("PACKAGE");
     note(
         &mut notes,
+        "package.sources",
+        "package sources were not imported from Debian metadata; populate them manually",
+        Confidence::Unsupported,
+    );
+    note(
+        &mut notes,
+        "package.sha256sums",
+        "source checksums were not imported from Debian metadata; calculate SHA-256 checksums manually",
+        Confidence::Unsupported,
+    );
+    note(
+        &mut notes,
         "package.files.paths",
         FILES_NOTE,
         Confidence::Unsupported,
@@ -190,10 +202,15 @@ pub fn import_debian_source(source_dir: &Path) -> Result<ImportDraft, DebImportE
         .iter()
         .enumerate()
         .map(|(index, entry)| {
-            confident(
+            note(
                 &mut notes,
                 &format!("package.changelog[{index}]"),
                 "copied from a well-formed Debian changelog entry",
+                if entry.date_normalization_failed {
+                    Confidence::BestEffort
+                } else {
+                    Confidence::Confident
+                },
             );
             ChangelogEntry {
                 version: entry.version.clone(),
@@ -613,6 +630,14 @@ sample (1.5-1) stable; urgency=low
             crate::model::BuildSystem::Cmake
         );
         assert_eq!(draft.spec.package.changelog.len(), 2);
+        assert!(draft.spec.package.sources.is_empty());
+        assert!(draft.spec.package.sha256sums.is_empty());
+        assert!(draft.notes.iter().any(|note| {
+            note.field_path == "package.sources" && note.confidence == Confidence::Unsupported
+        }));
+        assert!(draft.notes.iter().any(|note| {
+            note.field_path == "package.sha256sums" && note.confidence == Confidence::Unsupported
+        }));
         assert_eq!(draft.spec.subpackages.len(), 1);
         assert_eq!(draft.spec.subpackages[0].suffix, "dev");
         assert_eq!(draft.spec.subpackages[0].noarch, Some(true));
@@ -659,6 +684,22 @@ sample (1.5-1) stable; urgency=low
         assert!(rendered.contains("# TODO: file list not imported"));
         assert!(rendered.contains("override_dh_auto_install"));
         assert!(!rendered.contains("usr/lib/*/libsample.so"));
+    }
+
+    #[test]
+    fn marks_changelog_entries_with_raw_dates_as_best_effort() {
+        let directory = debian_source_fixture();
+        let changelog_path = directory.path().join("debian/changelog");
+        let changelog = std::fs::read_to_string(&changelog_path)
+            .unwrap()
+            .replace("Sun, 02 Aug 2026 12:34:56 +0200", "unparseable date");
+        std::fs::write(changelog_path, changelog).unwrap();
+
+        let draft = import_debian_source(directory.path()).unwrap();
+        assert!(draft.notes.iter().any(|note| {
+            note.field_path == "package.changelog[0]" && note.confidence == Confidence::BestEffort
+        }));
+        assert_eq!(draft.spec.package.changelog[0].date, "unparseable date");
     }
 
     #[test]

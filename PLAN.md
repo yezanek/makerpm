@@ -1,6 +1,6 @@
 # makerpm — Implementation Plan (v2)
 
-Builds on `plan.md` (v1). v1 delivered `makerpm build`/`fetch`/`spec`/
+Builds on `PLAN-v1.md`. v1 delivered `makerpm build`/`fetch`/`spec`/
 `validate`/`init`. v2 restructures the CLI around four subcommands and adds
 two importers that produce a *draft* `package.toml` from an existing
 packaging format, for manual review before building.

@@ -114,12 +114,59 @@ fn control_block_terminator(line: &str) -> Option<&'static str> {
 }
 
 fn skip_control_block(lines: &[&str], start: usize, terminator: &str) -> usize {
-    lines[start + 1..]
-        .iter()
-        .position(|line| {
-            line.trim().trim_end_matches(';').split_whitespace().next() == Some(terminator)
-        })
-        .map_or(lines.len(), |offset| start + offset + 2)
+    if control_token_count(lines[start], terminator) > 0 {
+        return start + 1;
+    }
+
+    let mut depth = 1_usize;
+    for (offset, line) in lines[start + 1..].iter().enumerate() {
+        if control_block_terminator(line.trim()) == Some(terminator) {
+            depth += 1;
+        }
+        depth = depth.saturating_sub(control_token_count(line, terminator));
+        if depth == 0 {
+            return start + offset + 2;
+        }
+    }
+    lines.len()
+}
+
+fn control_token_count(line: &str, token: &str) -> usize {
+    let mut count = 0;
+    let mut current = String::new();
+    let mut quote = None;
+    let mut escaped = false;
+
+    for character in line.chars() {
+        if escaped {
+            escaped = false;
+            current.push(character);
+            continue;
+        }
+        if character == '\\' && quote != Some('\'') {
+            escaped = true;
+            continue;
+        }
+        if let Some(active_quote) = quote {
+            if character == active_quote {
+                quote = None;
+            }
+            continue;
+        }
+        if matches!(character, '\'' | '"') {
+            quote = Some(character);
+        } else if character == '#' {
+            break;
+        } else if character.is_whitespace() || character == ';' {
+            if current == token {
+                count += 1;
+            }
+            current.clear();
+        } else {
+            current.push(character);
+        }
+    }
+    count + usize::from(current == token)
 }
 
 fn assignment(line: &str) -> Option<(&str, &str)> {
@@ -252,6 +299,9 @@ fn capture_function(lines: &[&str], start: usize) -> Result<(String, usize), Par
                     line_body.push(character);
                 }
                 continue;
+            }
+            if character == '#' {
+                break;
             }
             if character == '{' {
                 if started {
@@ -466,5 +516,60 @@ pkgver=1.0
             AssignmentValue::Scalar("static-name".to_string())
         );
         assert!(parsed.has_additional_logic);
+    }
+
+    #[test]
+    fn skips_single_line_and_nested_top_level_control_blocks() {
+        let parsed = parse(
+            "if true; then pkgname=ignored; fi\n\
+             if true; then\n\
+               if false; then\n\
+                 pkgver=ignored\n\
+               fi\n\
+             fi\n\
+             pkgname=sample\n\
+             pkgver=1.0\n",
+        )
+        .unwrap();
+        assert_eq!(
+            parsed.assignments["pkgname"],
+            AssignmentValue::Scalar("sample".to_string())
+        );
+        assert_eq!(
+            parsed.assignments["pkgver"],
+            AssignmentValue::Scalar("1.0".to_string())
+        );
+    }
+
+    #[test]
+    fn ignores_quoted_and_commented_control_terminators() {
+        let parsed = parse(
+            "if true; then\n\
+               echo 'fi' # fi\n\
+             fi\n\
+             pkgver=1.0\n",
+        )
+        .unwrap();
+        assert_eq!(
+            parsed.assignments["pkgver"],
+            AssignmentValue::Scalar("1.0".to_string())
+        );
+    }
+
+    #[test]
+    fn function_comments_cannot_close_the_body() {
+        let parsed = parse(
+            "build() {\n\
+               echo '# quoted }'\n\
+               echo before # comment closes }\n\
+               echo after\n\
+             }\n\
+             pkgver=1.0\n",
+        )
+        .unwrap();
+        assert!(parsed.functions["build"].contains("# quoted }"));
+        assert!(parsed.functions["build"].contains("echo after"));
+        assert!(!parsed.functions["build"].contains("comment closes"));
+        assert!(parsed.assignments.contains_key("pkgver"));
     }
 }

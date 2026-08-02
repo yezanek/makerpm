@@ -11,6 +11,34 @@ enum EarlyReturn {
     ),
 }
 
+fn run_import<E: std::fmt::Display>(
+    draft: Result<makerpm::import::ImportDraft, E>,
+    output: &std::path::Path,
+    force: bool,
+    success_note: &str,
+) -> ExitCode {
+    let draft = match draft {
+        Ok(draft) => draft,
+        Err(error) => {
+            eprintln!("Error: {error}");
+            return ExitCode::from(1);
+        }
+    };
+    let mut stderr = std::io::stderr().lock();
+    let result = makerpm::import::write_import_draft_and_report(&draft, output, force, &mut stderr);
+    drop(stderr);
+    match result {
+        Ok(_) => {
+            eprintln!("{success_note}");
+            ExitCode::SUCCESS
+        }
+        Err(error) => {
+            eprintln!("Error: {error}");
+            ExitCode::from(1)
+        }
+    }
+}
+
 fn load_and_lint(spec_file: &std::path::Path) -> EarlyReturn {
     let toml_str = match std::fs::read_to_string(spec_file) {
         Ok(s) => s,
@@ -340,62 +368,20 @@ entries = ["Initial package"]
 
         makerpm::cli::Commands::Import(args) => match args.command {
             makerpm::cli::ImportCommands::Arch(args) => {
-                let draft = match makerpm::import::arch::import_pkgbuild(&args.pkgbuild) {
-                    Ok(draft) => draft,
-                    Err(error) => {
-                        eprintln!("Error: {error}");
-                        return ExitCode::from(1);
-                    }
-                };
-                let mut stderr = std::io::stderr().lock();
-                let result = makerpm::import::write_import_draft_and_report(
-                    &draft,
+                run_import(
+                    makerpm::import::arch::import_pkgbuild(&args.pkgbuild),
                     &args.output,
                     args.force,
-                    &mut stderr,
-                );
-                drop(stderr);
-                match result {
-                    Ok(_) => {
-                        eprintln!(
-                            "Note: Arch file lists and .install scriptlets were not imported; populate them after a test build."
-                        );
-                        ExitCode::SUCCESS
-                    }
-                    Err(error) => {
-                        eprintln!("Error: {error}");
-                        ExitCode::from(1)
-                    }
-                }
+                    "Note: Arch file lists and .install scriptlets were not imported; populate them after a test build.",
+                )
             }
             makerpm::cli::ImportCommands::Deb(args) => {
-                let draft = match makerpm::import::deb::import_debian_source(&args.source_dir) {
-                    Ok(draft) => draft,
-                    Err(error) => {
-                        eprintln!("Error: {error}");
-                        return ExitCode::from(1);
-                    }
-                };
-                let mut stderr = std::io::stderr().lock();
-                let result = makerpm::import::write_import_draft_and_report(
-                    &draft,
+                run_import(
+                    makerpm::import::deb::import_debian_source(&args.source_dir),
                     &args.output,
                     args.force,
-                    &mut stderr,
-                );
-                drop(stderr);
-                match result {
-                    Ok(_) => {
-                        eprintln!(
-                            "Note: Debian file lists were not imported; populate every files section after a test build."
-                        );
-                        ExitCode::SUCCESS
-                    }
-                    Err(error) => {
-                        eprintln!("Error: {error}");
-                        ExitCode::from(1)
-                    }
-                }
+                    "Note: Debian file lists were not imported; populate every files section after a test build.",
+                )
             }
         },
     }
