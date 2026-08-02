@@ -176,6 +176,42 @@ system = "cmake"
         .stderr(predicates::str::contains("dependency=cmake"));
 }
 
+#[test]
+fn import_aur_writes_annotated_draft_without_executing_pkgbuild() {
+    let directory = tempfile::tempdir().unwrap();
+    let pkgbuild = directory.path().join("PKGBUILD");
+    let output = directory.path().join("package.toml");
+    std::fs::write(
+        &pkgbuild,
+        r#"pkgname=cli-aur-import
+pkgver=$(printf 'this must stay literal')
+pkgrel=1
+pkgdesc='CLI AUR import fixture with a sufficiently detailed summary'
+arch=('any')
+license=('MIT')
+source=('https://example.test/source.tar.gz')
+sha256sums=('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
+package() { install -Dm755 app "$pkgdir/usr/bin/app"; }
+"#,
+    )
+    .unwrap();
+
+    makerpm()
+        .args(["import", "aur"])
+        .arg(&pkgbuild)
+        .arg("-o")
+        .arg(&output)
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("Import summary"))
+        .stderr(predicate::str::contains("Unsupported:"));
+
+    let written = std::fs::read_to_string(output).unwrap();
+    assert!(written.contains("$(printf 'this must stay literal')"));
+    assert!(written.contains("%{buildroot}/usr/bin/app"));
+    assert!(written.contains("# TODO:"));
+}
+
 fn write_debian_fixture(root: &std::path::Path) {
     let debian = root.join("debian");
     std::fs::create_dir(&debian).unwrap();

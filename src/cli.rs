@@ -91,8 +91,24 @@ pub struct ImportArgs {
 
 #[derive(Subcommand)]
 pub enum ImportCommands {
+    /// Import an Arch Linux PKGBUILD without executing it
+    Aur(AurImportArgs),
     /// Import an extracted Debian source package
     Deb(DebImportArgs),
+}
+
+#[derive(clap::Args)]
+pub struct AurImportArgs {
+    /// Path to the PKGBUILD to import
+    pub pkgbuild: PathBuf,
+
+    /// Output makerpm TOML draft
+    #[arg(short, long, required = true)]
+    pub output: PathBuf,
+
+    /// Overwrite an existing output file
+    #[arg(long)]
+    pub force: bool,
 }
 
 #[derive(clap::Args)]

@@ -339,6 +339,35 @@ entries = ["Initial package"]
         }
 
         makerpm::cli::Commands::Import(args) => match args.command {
+            makerpm::cli::ImportCommands::Aur(args) => {
+                let draft = match makerpm::import::aur::import_pkgbuild(&args.pkgbuild) {
+                    Ok(draft) => draft,
+                    Err(error) => {
+                        eprintln!("Error: {error}");
+                        return ExitCode::from(1);
+                    }
+                };
+                let mut stderr = std::io::stderr().lock();
+                let result = makerpm::import::write_import_draft_and_report(
+                    &draft,
+                    &args.output,
+                    args.force,
+                    &mut stderr,
+                );
+                drop(stderr);
+                match result {
+                    Ok(_) => {
+                        eprintln!(
+                            "Note: AUR file lists and .install scriptlets were not imported; populate them after a test build."
+                        );
+                        ExitCode::SUCCESS
+                    }
+                    Err(error) => {
+                        eprintln!("Error: {error}");
+                        ExitCode::from(1)
+                    }
+                }
+            }
             makerpm::cli::ImportCommands::Deb(args) => {
                 let draft = match makerpm::import::deb::import_debian_source(&args.source_dir) {
                     Ok(draft) => draft,

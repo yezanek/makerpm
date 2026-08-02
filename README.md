@@ -49,6 +49,7 @@ makerpm fetch [PATH] [FLAGS]
 makerpm lint  [PATH] [--strict]
 makerpm init [--name NAME]
 makerpm import deb <SOURCE_DIR> -o <PATH> [--force]
+makerpm import aur <PKGBUILD> -o <PATH> [--force]
 ```
 
 `-v`, `-vv`, and `--verbose` are global options and work with every subcommand.
@@ -66,6 +67,7 @@ makerpm import deb <SOURCE_DIR> -o <PATH> [--force]
 | `lint` | Parse and lint the TOML; `--strict` also fails on warnings |
 | `init` | Create a starter `PKGSPEC.toml` in the current directory |
 | `import deb` | Convert extracted Debian source metadata into an annotated makerpm draft |
+| `import aur` | Convert a PKGBUILD into an annotated makerpm draft without executing shell code |
 
 **Build/fetch flags:**
 
