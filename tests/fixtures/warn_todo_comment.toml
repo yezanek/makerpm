@@ -1,0 +1,13 @@
+[package]
+name = "todo-comment"
+version = "1.0"
+summary = "A package with an import review item"
+license = "MIT"
+# TODO(import): verify the generated description
+description = "This description still needs a human review."
+
+[[package.changelog]]
+version = "1.0-1"
+date = "2026-06-29"
+packager = "Test <test@example.org>"
+entries = ["Initial"]

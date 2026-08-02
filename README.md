@@ -43,25 +43,26 @@ makerpm build
 
 ```
 makerpm [-v|-vv|--verbose] <COMMAND>
-makerpm build [--spec-file PKGSPEC.toml] [--output-dir DIR] [FLAGS]
-makerpm spec  [--spec-file PKGSPEC.toml] [--output FILE]
-makerpm fetch [--spec-file PKGSPEC.toml] [FLAGS]
-makerpm validate [--spec-file PKGSPEC.toml]
+makerpm build [PATH] [--output-dir DIR] [FLAGS]
+makerpm spec  [PATH] [--output FILE]
+makerpm fetch [PATH] [FLAGS]
+makerpm lint  [PATH] [--strict]
 makerpm init [--name NAME]
 ```
 
 `-v`, `-vv`, and `--verbose` are global options and work with every subcommand.
 
-`--spec-file` defaults to `./PKGSPEC.toml` in the current directory.
+`PATH` defaults to `./PKGSPEC.toml` in the current directory. The former
+`validate` command remains available as a hidden alias for `lint`.
 
 **Subcommands:**
 
 | Command | Description |
 |---|---|
-| `build` | Full pipeline: parse, validate, fetch sources, render `.spec`, invoke `rpmbuild`, collect RPMs |
+| `build` | Full pipeline: parse, lint, fetch sources, render `.spec`, invoke `rpmbuild`, collect RPMs |
 | `spec` | Render the `.spec` file only (no download, no build) |
 | `fetch` | Download and verify remote sources without building |
-| `validate` | Parse and validate the TOML, exit with code 1 on errors |
+| `lint` | Parse and lint the TOML; `--strict` also fails on warnings |
 | `init` | Create a starter `PKGSPEC.toml` in the current directory |
 
 **Build/fetch flags:**
