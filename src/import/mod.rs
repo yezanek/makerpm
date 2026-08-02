@@ -9,6 +9,8 @@ use toml_edit::{DocumentMut, Table};
 
 use crate::model::PkgSpecFile;
 
+pub mod deb;
+
 #[derive(Debug)]
 pub struct ImportDraft {
     pub spec: PkgSpecFile,

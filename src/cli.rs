@@ -26,6 +26,8 @@ pub enum Commands {
     Build(BuildArgs),
     /// Scaffold a new PKGSPEC.toml in the current directory
     Init(InitArgs),
+    /// Import packaging metadata into a makerpm draft
+    Import(ImportArgs),
 }
 
 #[derive(clap::Args)]
@@ -79,6 +81,32 @@ pub struct InitArgs {
     /// Package name (defaults to current directory name)
     #[arg(short, long)]
     pub name: Option<String>,
+}
+
+#[derive(clap::Args)]
+pub struct ImportArgs {
+    #[command(subcommand)]
+    pub command: ImportCommands,
+}
+
+#[derive(Subcommand)]
+pub enum ImportCommands {
+    /// Import an extracted Debian source package
+    Deb(DebImportArgs),
+}
+
+#[derive(clap::Args)]
+pub struct DebImportArgs {
+    /// Extracted Debian source package directory
+    pub source_dir: PathBuf,
+
+    /// Output makerpm TOML draft
+    #[arg(short, long, required = true)]
+    pub output: PathBuf,
+
+    /// Overwrite an existing output file
+    #[arg(long)]
+    pub force: bool,
 }
 
 #[derive(clap::Args)]

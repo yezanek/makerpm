@@ -337,6 +337,38 @@ entries = ["Initial package"]
                 }
             }
         }
+
+        makerpm::cli::Commands::Import(args) => match args.command {
+            makerpm::cli::ImportCommands::Deb(args) => {
+                let draft = match makerpm::import::deb::import_debian_source(&args.source_dir) {
+                    Ok(draft) => draft,
+                    Err(error) => {
+                        eprintln!("Error: {error}");
+                        return ExitCode::from(1);
+                    }
+                };
+                let mut stderr = std::io::stderr().lock();
+                let result = makerpm::import::write_import_draft_and_report(
+                    &draft,
+                    &args.output,
+                    args.force,
+                    &mut stderr,
+                );
+                drop(stderr);
+                match result {
+                    Ok(_) => {
+                        eprintln!(
+                            "Note: Debian file lists were not imported; populate every files section after a test build."
+                        );
+                        ExitCode::SUCCESS
+                    }
+                    Err(error) => {
+                        eprintln!("Error: {error}");
+                        ExitCode::from(1)
+                    }
+                }
+            }
+        },
     }
 }
 

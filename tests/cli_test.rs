@@ -175,3 +175,90 @@ system = "cmake"
         ))
         .stderr(predicates::str::contains("dependency=cmake"));
 }
+
+fn write_debian_fixture(root: &std::path::Path) {
+    let debian = root.join("debian");
+    std::fs::create_dir(&debian).unwrap();
+    std::fs::write(
+        debian.join("control"),
+        r#"Source: cli-import
+Maintainer: Test <test@example.org>
+
+Package: cli-import
+Architecture: all
+Description: CLI import fixture
+ A complete Debian import fixture.
+"#,
+    )
+    .unwrap();
+    std::fs::write(
+        debian.join("changelog"),
+        r#"cli-import (1.0-1) unstable; urgency=medium
+
+  * Initial release.
+
+ -- Test <test@example.org>  Sun, 02 Aug 2026 12:34:56 +0200
+"#,
+    )
+    .unwrap();
+    std::fs::write(debian.join("copyright"), "License: MIT\n").unwrap();
+}
+
+#[test]
+fn import_deb_writes_draft_and_summary() {
+    let directory = tempfile::tempdir().unwrap();
+    write_debian_fixture(directory.path());
+    let output = directory.path().join("package.toml");
+
+    makerpm()
+        .args(["import", "deb"])
+        .arg(directory.path())
+        .args(["-o"])
+        .arg(&output)
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("Import summary"))
+        .stderr(predicate::str::contains("makerpm lint"));
+
+    let written = std::fs::read_to_string(output).unwrap();
+    assert!(written.contains("# TODO: file list not imported"));
+}
+
+#[test]
+fn import_deb_requires_force_to_overwrite() {
+    let directory = tempfile::tempdir().unwrap();
+    write_debian_fixture(directory.path());
+    let output = directory.path().join("package.toml");
+    std::fs::write(&output, "existing").unwrap();
+
+    makerpm()
+        .args(["import", "deb"])
+        .arg(directory.path())
+        .args(["-o"])
+        .arg(&output)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("--force"));
+
+    makerpm()
+        .args(["import", "deb"])
+        .arg(directory.path())
+        .args(["-o"])
+        .arg(&output)
+        .arg("--force")
+        .assert()
+        .success();
+}
+
+#[test]
+fn import_deb_rejects_non_debian_source_directory() {
+    let directory = tempfile::tempdir().unwrap();
+    makerpm()
+        .args(["import", "deb"])
+        .arg(directory.path())
+        .args(["-o"])
+        .arg(directory.path().join("package.toml"))
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("not a Debian source package"));
+}
