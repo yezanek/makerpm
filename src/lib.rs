@@ -2,6 +2,7 @@ pub mod build_tree;
 pub mod cli;
 pub mod error;
 pub mod fetch;
+pub mod import;
 pub mod lint;
 pub mod model;
 pub mod parse;

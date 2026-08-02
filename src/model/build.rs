@@ -1,6 +1,6 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize, Default, PartialEq, Eq)]
+#[derive(Debug, Deserialize, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum BuildSystem {
     #[default]
@@ -13,7 +13,7 @@ pub enum BuildSystem {
     PythonPyproject,
 }
 
-#[derive(Debug, Deserialize, Default)]
+#[derive(Debug, Deserialize, Default, Serialize)]
 pub struct BuildSteps {
     #[serde(default)]
     pub prep: Option<String>,
@@ -25,7 +25,7 @@ pub struct BuildSteps {
     pub check: Option<String>,
 }
 
-#[derive(Debug, Deserialize, Default)]
+#[derive(Debug, Deserialize, Default, Serialize)]
 pub struct BuildSpec {
     #[serde(default)]
     pub system: BuildSystem,

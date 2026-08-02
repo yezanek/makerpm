@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use super::{BuildSpec, ChangelogEntry, DependencySet, FilesSpec, Scriptlets};
 
@@ -6,7 +6,7 @@ fn default_release() -> String {
     "1%{?dist}".to_string()
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct Package {
     pub name: String,
     pub version: String,
@@ -43,7 +43,7 @@ pub struct Package {
     pub changelog: Vec<ChangelogEntry>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct Subpackage {
     pub suffix: String,
     pub summary: String,
@@ -62,7 +62,7 @@ pub struct Subpackage {
     pub scriptlets: Scriptlets,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct PkgSpecFile {
     pub package: Package,
     #[serde(default, rename = "subpackage")]
