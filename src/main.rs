@@ -344,7 +344,11 @@ entries = ["Initial package"]
                 date = today_utc(),
             );
 
-            let path = std::path::PathBuf::from("RPMSPEC.toml");
+            let output_dir = args
+                .output
+                .as_deref()
+                .unwrap_or_else(|| std::path::Path::new("."));
+            let path = output_dir.join("RPMSPEC.toml");
             match std::fs::OpenOptions::new()
                 .write(true)
                 .create_new(true)

@@ -2,14 +2,14 @@
 
 Builds on `PLAN-v1.md`. v1 delivered `makerpm build`/`fetch`/`spec`/
 `validate`/`init`. v2 restructures the CLI around four subcommands and adds
-two importers that produce a *draft* `package.toml` from an existing
+two importers that produce a *draft* `RPMSPEC.toml` from an existing
 packaging format, for manual review before building.
 
 ```
-makerpm build  package.toml
-makerpm lint   package.toml
-makerpm import deb ./path/to/debian/source/ -o package.toml
-makerpm import arch ./PKGBUILD -o package.toml
+makerpm build  RPMSPEC.toml
+makerpm lint   RPMSPEC.toml
+makerpm import deb ./path/to/debian/source/ -o RPMSPEC.toml
+makerpm import arch ./PKGBUILD -o RPMSPEC.toml
 ```
 
 ---
@@ -25,9 +25,9 @@ makerpm import arch ./PKGBUILD -o package.toml
 3. `makerpm import deb <dir> -o <path>` — parses an **already-extracted**
    Debian source package directory (i.e. `dpkg-source -x` has already been
    run; `debian/` sits next to the upstream source tree) and emits a draft
-   `package.toml`.
+   `RPMSPEC.toml` (or another path passed to `-o`).
 4. `makerpm import arch <PKGBUILD> -o <path>` — parses a `PKGBUILD` file and
-   emits a draft `package.toml`.
+   emits a draft `RPMSPEC.toml` (or another path passed to `-o`).
 
 ### Explicit non-goals for v2
 
@@ -132,7 +132,7 @@ pub struct LintFinding {
 
 ## 4. Shared import infrastructure
 
-Both importers produce the same output shape (a `package.toml` draft) and
+Both importers produce the same output shape (an `RPMSPEC.toml` draft) and
 share the same core design constraints, so build the shared pieces first
 and let each importer be a thin frontend over them.
 
@@ -186,7 +186,7 @@ pub enum Confidence {
 `BestEffort` and `Unsupported` fields get a `# TODO:` comment immediately
 above them in the written file, sourced from `ImportNote::note`. This is
 the single most important UX property of both importers: **a reviewer
-should be able to `grep TODO package.toml` and know exactly what needs
+should be able to `grep TODO RPMSPEC.toml` and know exactly what needs
 manual attention**, rather than having to diff every field against the
 original source by hand.
 
@@ -201,7 +201,7 @@ inject comments at the right keys), attaching each `ImportNote` as a
 comment directly above its field.
 
 `makerpm build`/`lint`/`spec` continue to use `serde`+`toml` for *reading*
-`package.toml` as before — this only affects the write path used by
+`RPMSPEC.toml` as before — this only affects the write path used by
 `import` (and, if useful, `init`, which could similarly comment its
 scaffolded template rather than leaving fields silently unexplained).
 
@@ -532,8 +532,8 @@ new warning rules). No importer code yet.
 > `import` in this phase — it doesn't exist yet.
 
 **Exit checklist:**
-- [ ] `makerpm build package.toml`, `makerpm lint package.toml`, etc. all
-      work with the positional argument; `makerpm validate package.toml`
+- [ ] `makerpm build RPMSPEC.toml`, `makerpm lint RPMSPEC.toml`, etc. all
+      work with the positional argument; `makerpm validate RPMSPEC.toml`
       still works as a silent alias.
 - [ ] Every v1 validation-rule test still passes, now asserting
       `Severity::Error` findings instead of the old pass/fail boolean.

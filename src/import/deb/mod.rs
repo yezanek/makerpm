@@ -243,6 +243,7 @@ pub fn import_debian_source(source_dir: &Path) -> Result<ImportDraft, DebImportE
     }
 
     let mut subpackages = Vec::new();
+    let mut used_suffixes = std::collections::HashSet::new();
     for (binary_index, stanza) in control.binaries.iter().enumerate() {
         if binary_index == base_index {
             continue;
@@ -252,6 +253,17 @@ pub fn import_debian_source(source_dir: &Path) -> Result<ImportDraft, DebImportE
             .get("Package")
             .expect("control parser only returns binary Package stanzas");
         let suffix = derive_suffix(source_name, binary_name);
+        if !used_suffixes.insert(suffix.clone()) {
+            note(
+                &mut notes,
+                &format!("subpackage[{index}].suffix"),
+                format!(
+                    "derived suffix {suffix:?} for Debian package {binary_name} collides with an earlier subpackage; skipped duplicate subpackage"
+                ),
+                Confidence::Unsupported,
+            );
+            continue;
+        }
         let (sub_summary, sub_description) = control::description(stanza);
         note(
             &mut notes,
@@ -700,6 +712,9 @@ sample (1.5-1) stable; urgency=low
             note.field_path == "package.changelog[0]" && note.confidence == Confidence::BestEffort
         }));
         assert_eq!(draft.spec.package.changelog[0].date, "unparseable date");
+
+        let rendered = render_import_draft(&draft).unwrap();
+        parse_rpmspec(&rendered).expect("rendered changelog draft should parse cleanly");
     }
 
     #[test]

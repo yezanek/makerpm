@@ -93,7 +93,16 @@ fn translate_name(name: &str) -> (String, Confidence, String) {
         );
     }
     if name.starts_with("lib") && name.ends_with(|character: char| character.is_ascii_digit()) {
-        let stripped = name.trim_end_matches(|character: char| character.is_ascii_digit());
+        let stripped = name
+            .trim_end_matches(|character: char| character.is_ascii_digit())
+            .trim_end_matches(['.', '-', '_']);
+        if stripped.is_empty() {
+            return (
+                name.to_string(),
+                Confidence::Unsupported,
+                format!("could not derive a Fedora package name from {name}"),
+            );
+        }
         return (
             stripped.to_string(),
             Confidence::BestEffort,

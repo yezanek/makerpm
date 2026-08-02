@@ -70,6 +70,8 @@ pub fn parse(input: &str) -> Result<Vec<DebianChangelogEntry>, ChangelogError> {
                 if let Some(previous) = changes.last_mut() {
                     previous.push(' ');
                     previous.push_str(trimmed);
+                } else {
+                    changes.push(trimmed.to_string());
                 }
             }
             index += 1;

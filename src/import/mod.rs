@@ -160,6 +160,10 @@ pub fn write_import_draft(
             path: output.to_path_buf(),
             source,
         })?;
+    file.flush().map_err(|source| ImportError::Write {
+        path: output.to_path_buf(),
+        source,
+    })?;
 
     Ok(ImportSummary::from_draft(draft))
 }
@@ -228,6 +232,19 @@ fn parse_field_path(field_path: &str) -> Result<Vec<PathSegment<'_>>, ImportErro
         .collect()
 }
 
+fn set_prefix_preserving(decor: &mut toml_edit::Decor, comment: &str) {
+    let existing = decor
+        .prefix()
+        .and_then(|raw| raw.as_str())
+        .unwrap_or("");
+    let combined = if existing.is_empty() {
+        comment.to_string()
+    } else {
+        format!("{comment}{existing}")
+    };
+    decor.set_prefix(&combined);
+}
+
 fn annotate_table(
     table: &mut Table,
     segments: &[PathSegment<'_>],
@@ -245,7 +262,7 @@ fn annotate_table(
             .and_then(|array| array.get_mut(index))
             .ok_or_else(|| ImportError::UnknownFieldPath(field_path.to_string()))?;
         if remaining.is_empty() {
-            child.decor_mut().set_prefix(comment);
+            set_prefix_preserving(child.decor_mut(), comment);
             return Ok(());
         }
         return annotate_table(child, remaining, field_path, comment);
@@ -256,13 +273,13 @@ fn annotate_table(
             .get_mut(segment.key)
             .and_then(toml_edit::Item::as_table_mut)
         {
-            child.decor_mut().set_prefix(comment);
+            set_prefix_preserving(child.decor_mut(), comment);
             return Ok(());
         }
         let mut key = table
             .key_mut(segment.key)
             .ok_or_else(|| ImportError::UnknownFieldPath(field_path.to_string()))?;
-        key.leaf_decor_mut().set_prefix(comment);
+        set_prefix_preserving(key.leaf_decor_mut(), comment);
         return Ok(());
     }
 
@@ -437,9 +454,11 @@ mod tests {
         let rendered = render_import_draft(&draft).unwrap();
         let parsed = parse_rpmspec(&rendered).expect("decorated output must remain valid TOML");
 
-        assert!(rendered.contains(
-            "# TODO: referenced evil.install\n# TODO: [injected]\n# TODO: owned = true\\u{0}\n[package.scriptlets]"
-        ));
+        assert!(rendered.contains("# TODO: referenced evil.install"));
+        assert!(rendered.contains("# TODO: [injected]"));
+        assert!(rendered.contains("# TODO: owned = true\\u{0}"));
+        let scriptlets_header = rendered.find("[package.scriptlets]").expect("scriptlets table");
+        assert!(rendered[..scriptlets_header].contains("# TODO: referenced evil.install"));
         assert_eq!(parsed.package.name, "imported-package");
         assert!(!rendered.contains("\n[injected]\n"));
     }

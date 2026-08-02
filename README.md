@@ -47,7 +47,7 @@ makerpm build [PATH] [--output-dir DIR] [FLAGS]
 makerpm spec  [PATH] [--output FILE]
 makerpm fetch [PATH] [FLAGS]
 makerpm lint  [PATH] [--strict]
-makerpm init [--name NAME]
+makerpm init [--name NAME] [-o PATH]
 makerpm import deb <SOURCE_DIR> -o <PATH> [--force]
 makerpm import arch <PKGBUILD> -o <PATH> [--force]
 ```
@@ -65,7 +65,7 @@ makerpm import arch <PKGBUILD> -o <PATH> [--force]
 | `spec` | Render the `.spec` file only (no download, no build) |
 | `fetch` | Download and verify remote sources without building |
 | `lint` | Parse and lint the TOML; `--strict` also fails on warnings |
-| `init` | Create a starter `RPMSPEC.toml` in the current directory |
+| `init` | Create a starter `RPMSPEC.toml` (use `-o PATH` to select the output directory; defaults to the current directory) |
 | `import deb` | Convert extracted Debian source metadata into an annotated makerpm draft |
 | `import arch` | Convert a PKGBUILD into an annotated makerpm draft without executing shell code |
 

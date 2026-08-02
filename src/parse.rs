@@ -4,7 +4,7 @@ use thiserror::Error;
 use crate::model::PkgSpecFile;
 
 #[derive(Debug, Error, Diagnostic)]
-#[error("failed to parse RPMSPEC.toml")]
+#[error("failed to parse package specification")]
 pub struct ParseError {
     #[source]
     pub inner: toml::de::Error,

@@ -16,19 +16,29 @@ pub struct DetectedOverride {
 }
 
 pub fn detect(source_dir: &Path, rules_text: Option<&str>) -> BuildDetection {
-    let system = if is_confined_file(source_dir, "CMakeLists.txt") {
+    let Ok(canonical_source_dir) = source_dir.canonicalize() else {
+        return BuildDetection {
+            build: BuildSpec {
+                system: BuildSystem::None,
+                ..BuildSpec::default()
+            },
+            overrides: rules_text.map(detect_overrides).unwrap_or_default(),
+        };
+    };
+
+    let system = if is_confined_file(&canonical_source_dir, "CMakeLists.txt") {
         BuildSystem::Cmake
-    } else if is_confined_file(source_dir, "meson.build") {
+    } else if is_confined_file(&canonical_source_dir, "meson.build") {
         BuildSystem::Meson
-    } else if is_confined_file(source_dir, "configure.ac")
-        || is_confined_file(source_dir, "configure")
+    } else if is_confined_file(&canonical_source_dir, "configure.ac")
+        || is_confined_file(&canonical_source_dir, "configure")
     {
         BuildSystem::Autotools
-    } else if is_confined_file(source_dir, "Cargo.toml") {
+    } else if is_confined_file(&canonical_source_dir, "Cargo.toml") {
         BuildSystem::Cargo
-    } else if is_confined_file(source_dir, "pyproject.toml") {
+    } else if is_confined_file(&canonical_source_dir, "pyproject.toml") {
         BuildSystem::PythonPyproject
-    } else if is_confined_file(source_dir, "Makefile") {
+    } else if is_confined_file(&canonical_source_dir, "Makefile") {
         BuildSystem::Make
     } else {
         BuildSystem::None
@@ -53,13 +63,10 @@ pub fn detect(source_dir: &Path, rules_text: Option<&str>) -> BuildDetection {
     BuildDetection { build, overrides }
 }
 
-fn is_confined_file(source_dir: &Path, name: &str) -> bool {
-    let Ok(source_dir) = source_dir.canonicalize() else {
-        return false;
-    };
-    let path = source_dir.join(name);
+fn is_confined_file(canonical_source_dir: &Path, name: &str) -> bool {
+    let path = canonical_source_dir.join(name);
     path.canonicalize()
-        .is_ok_and(|resolved| resolved.starts_with(source_dir) && resolved.is_file())
+        .is_ok_and(|resolved| resolved.starts_with(canonical_source_dir) && resolved.is_file())
 }
 
 fn detect_overrides(rules: &str) -> Vec<DetectedOverride> {

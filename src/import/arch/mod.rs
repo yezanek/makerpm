@@ -140,11 +140,27 @@ pub fn draft_from_parsed(parsed: &ParsedPkgbuild) -> Result<ImportDraft, ArchImp
     let arch = values(parsed, "arch");
     let noarch = arch.len() == 1 && arch[0] == "any";
     if !flag_command_substitution(parsed, "arch", "package.noarch", &mut notes) {
-        confident(
-            &mut notes,
-            "package.noarch",
-            "mapped directly from the PKGBUILD arch array",
-        );
+        if arch.is_empty() {
+            note(
+                &mut notes,
+                "package.noarch",
+                "PKGBUILD has no arch array; noarch was set to false",
+                Confidence::BestEffort,
+            );
+        } else if noarch {
+            confident(
+                &mut notes,
+                "package.noarch",
+                "mapped directly from the PKGBUILD arch array containing only any",
+            );
+        } else {
+            note(
+                &mut notes,
+                "package.noarch",
+                "mapped from a PKGBUILD arch array that specifies concrete architectures",
+                Confidence::BestEffort,
+            );
+        }
     }
 
     let url = parsed.assignments.get("url").map(first).map(str::to_string);
@@ -245,6 +261,29 @@ pub fn draft_from_parsed(parsed: &ParsedPkgbuild) -> Result<ImportDraft, ArchImp
             &mut notes,
             "package.name",
             "PKGBUILD contains additional logic outside recognized fields; review the original file for anything not reflected here",
+            Confidence::Unsupported,
+        );
+    }
+
+    let consumed_fields = [
+        "pkgname", "pkgver", "pkgrel", "pkgdesc", "arch", "url", "license", "depends",
+        "depends_x86_64", "makedepends", "makedepends_x86_64", "optdepends", "provides",
+        "conflicts", "replaces", "source", "sha256sums", "b2sums", "md5sums", "install",
+    ];
+    let unrecognized = parsed
+        .assignments
+        .keys()
+        .filter(|field| !consumed_fields.contains(&field.as_str()))
+        .cloned()
+        .collect::<Vec<_>>();
+    if !unrecognized.is_empty() {
+        note(
+            &mut notes,
+            "package.name",
+            format!(
+                "PKGBUILD assignments not imported: {}",
+                unrecognized.join(", ")
+            ),
             Confidence::Unsupported,
         );
     }

@@ -20,7 +20,7 @@ version =
     assert!(result.is_err());
     let err = result.unwrap_err();
     let msg = format!("{err}");
-    assert!(msg.contains("failed to parse RPMSPEC.toml"));
+    assert!(msg.contains("failed to parse package specification"));
 }
 
 #[test]

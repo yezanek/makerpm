@@ -127,22 +127,25 @@ fn lint_licenses(spec: &PkgSpecFile, findings: &mut Vec<LintFinding>) {
     }
 }
 
-fn lint_sources(spec: &PkgSpecFile, toml_dir: &Path, findings: &mut Vec<LintFinding>) {
-    let all_sources = spec
-        .package
+fn all_source_and_patch_entries(
+    spec: &PkgSpecFile,
+) -> impl Iterator<Item = (&'static str, usize, &str)> {
+    spec.package
         .sources
         .iter()
         .enumerate()
-        .map(|(index, source)| (index, source.as_str(), "source"))
+        .map(|(index, source)| ("source", index, source.as_str()))
         .chain(
             spec.package
                 .patches
                 .iter()
                 .enumerate()
-                .map(|(index, patch)| (index, patch.as_str(), "patch")),
-        );
+                .map(|(index, patch)| ("patch", index, patch.as_str())),
+        )
+}
 
-    for (index, raw, kind) in all_sources {
+fn lint_sources(spec: &PkgSpecFile, toml_dir: &Path, findings: &mut Vec<LintFinding>) {
+    for (kind, index, raw) in all_source_and_patch_entries(spec) {
         let field_path = format!("package.{kind}s[{index}]");
         if let SourceEntry::Local { filename } = source_spec::parse_source_entry(raw) {
             if filename.is_empty() {
@@ -226,20 +229,7 @@ fn length_mismatch_detail(
 
 fn lint_source_filenames(spec: &PkgSpecFile, findings: &mut Vec<LintFinding>) {
     let mut seen = std::collections::HashMap::<String, String>::new();
-    for (kind, index, raw) in spec
-        .package
-        .sources
-        .iter()
-        .enumerate()
-        .map(|(i, raw)| ("source", i, raw))
-        .chain(
-            spec.package
-                .patches
-                .iter()
-                .enumerate()
-                .map(|(i, raw)| ("patch", i, raw)),
-        )
-    {
+    for (kind, index, raw) in all_source_and_patch_entries(spec) {
         let filename = match source_spec::parse_source_entry(raw) {
             SourceEntry::Local { filename } | SourceEntry::Remote { filename, .. } => filename,
         };
@@ -267,33 +257,33 @@ fn lint_source_filenames(spec: &PkgSpecFile, findings: &mut Vec<LintFinding>) {
 
 fn lint_unverified_sources(spec: &PkgSpecFile, findings: &mut Vec<LintFinding>) -> bool {
     let mut found = false;
-    for (i, raw) in spec.package.sources.iter().enumerate() {
+    for (kind, index, raw) in all_source_and_patch_entries(spec) {
         if let SourceEntry::Remote { filename, .. } = source_spec::parse_source_entry(raw) {
-            let checksum = spec.package.sha256sums.get(i).map(String::as_str);
+            let checksum = match kind {
+                "source" => spec.package.sha256sums.get(index).map(String::as_str),
+                "patch" => spec
+                    .package
+                    .patch_sha256sums
+                    .get(index)
+                    .map(String::as_str),
+                _ => None,
+            };
             if checksum.is_none() || checksum == Some("SKIP") {
+                let (checksum_field, suggestion) = if kind == "source" {
+                    ("sha256sums", "add a SHA-256 checksum in package.sha256sums")
+                } else {
+                    (
+                        "patch_sha256sums",
+                        "add a SHA-256 checksum in package.patch_sha256sums",
+                    )
+                };
                 findings.push(LintFinding::warning(
-                    format!("package.sources[{i}]"),
+                    format!("package.{kind}s[{index}]"),
                     format!(
-                        "remote source \"{filename}\" has no declared sha256sums entry; \
+                        "remote {kind} \"{filename}\" has no declared {checksum_field} entry; \
                      consider adding a checksum for verification"
                     ),
-                    "add a SHA-256 checksum in package.sha256sums",
-                ));
-                found = true;
-            }
-        }
-    }
-    for (i, raw) in spec.package.patches.iter().enumerate() {
-        if let SourceEntry::Remote { filename, .. } = source_spec::parse_source_entry(raw) {
-            let checksum = spec.package.patch_sha256sums.get(i).map(String::as_str);
-            if checksum.is_none() || checksum == Some("SKIP") {
-                findings.push(LintFinding::warning(
-                    format!("package.patches[{i}]"),
-                    format!(
-                        "remote patch \"{filename}\" has no declared patch_sha256sums entry; \
-                     consider adding a checksum for verification"
-                    ),
-                    "add a SHA-256 checksum in package.patch_sha256sums",
+                    suggestion,
                 ));
                 found = true;
             }
@@ -463,23 +453,45 @@ fn lint_todo_comments(raw_toml: &str, findings: &mut Vec<LintFinding>) {
 }
 
 fn lint_file_overlap(spec: &PkgSpecFile, findings: &mut Vec<LintFinding>) {
-    let mut seen: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    struct FileOwner {
+        label: String,
+        field_path: String,
+    }
+
+    let mut seen: std::collections::HashMap<String, FileOwner> = std::collections::HashMap::new();
 
     for (path, owner) in spec
         .package
         .files
         .all_paths()
-        .map(|p| (p.to_string(), "package".to_string()))
-        .chain(spec.subpackages.iter().flat_map(|sub| {
-            sub.files
-                .all_paths()
-                .map(move |p| (p.to_string(), format!("subpackage '{}'", sub.suffix)))
+        .map(|path| {
+            (
+                path.to_string(),
+                FileOwner {
+                    label: "package".to_string(),
+                    field_path: "package.files".to_string(),
+                },
+            )
+        })
+        .chain(spec.subpackages.iter().enumerate().flat_map(|(index, sub)| {
+            sub.files.all_paths().map(move |path| {
+                (
+                    path.to_string(),
+                    FileOwner {
+                        label: format!("subpackage '{}'", sub.suffix),
+                        field_path: format!("subpackage[{index}].files"),
+                    },
+                )
+            })
         }))
     {
-        if let Some(prev_owner) = seen.get(&path) {
+        if let Some(previous) = seen.get(&path) {
             findings.push(LintFinding::error(
-                "package.files",
-                format!("file path \"{path}\" is claimed by both {prev_owner} and {owner}"),
+                &owner.field_path,
+                format!(
+                    "file path \"{path}\" is claimed by both {} and {}",
+                    previous.label, owner.label
+                ),
             ));
         } else {
             seen.insert(path, owner);

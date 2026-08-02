@@ -343,9 +343,7 @@ fn capture_function(lines: &[&str], start: usize) -> Result<(String, usize), Par
 
 fn parse_scalar(raw: &str) -> Result<String, ()> {
     let raw = strip_inline_comment(raw).trim();
-    if raw.len() >= 2 {
-        let first = raw.as_bytes()[0] as char;
-        let last = raw.as_bytes()[raw.len() - 1] as char;
+    if let (Some(first), Some(last)) = (raw.chars().next(), raw.chars().next_back()) {
         if matches!(first, '\'' | '"') {
             if first != last {
                 return Err(());
@@ -389,6 +387,7 @@ fn tokenize_array(raw: &str) -> Result<Vec<String>, ()> {
     let mut quote = None;
     let mut escaped = false;
     let mut command_depth = 0_usize;
+    let mut backtick_depth = 0_usize;
     let characters = raw.chars().collect::<Vec<_>>();
     let mut index = 0;
 
@@ -424,11 +423,18 @@ fn tokenize_array(raw: &str) -> Result<Vec<String>, ()> {
         } else if character == ')' && command_depth > 0 {
             command_depth -= 1;
             current.push(character);
-        } else if character.is_whitespace() && command_depth == 0 {
+        } else if character == '`' {
+            if backtick_depth == 0 {
+                backtick_depth += 1;
+            } else {
+                backtick_depth -= 1;
+            }
+            current.push(character);
+        } else if character.is_whitespace() && command_depth == 0 && backtick_depth == 0 {
             if !current.is_empty() {
                 values.push(std::mem::take(&mut current));
             }
-        } else if character == '#' && command_depth == 0 {
+        } else if character == '#' && command_depth == 0 && backtick_depth == 0 {
             while index < characters.len() && characters[index] != '\n' {
                 index += 1;
             }
@@ -438,7 +444,7 @@ fn tokenize_array(raw: &str) -> Result<Vec<String>, ()> {
         }
         index += 1;
     }
-    if quote.is_some() {
+    if quote.is_some() || backtick_depth > 0 {
         return Err(());
     }
     if !current.is_empty() {
@@ -478,6 +484,16 @@ build() {
         );
         assert!(parsed.functions["build"].contains("make PREFIX"));
         assert!(parsed.functions["build"].contains("{opaque}"));
+    }
+
+    #[test]
+    fn tokenizes_backtick_command_substitution_as_one_array_element() {
+        let parsed = parse("source=(`git describe --tags`.tar.gz)\n").unwrap();
+        assert_eq!(
+            parsed.assignments["source"],
+            AssignmentValue::Array(vec!["`git describe --tags`.tar.gz".to_string()])
+        );
+        assert!(parsed.assignments["source"].contains_command_substitution());
     }
 
     #[test]

@@ -24,7 +24,7 @@ pub enum Commands {
     Fetch(FetchArgs),
     /// Build RPMs from an RPMSPEC.toml
     Build(BuildArgs),
-    /// Scaffold a new RPMSPEC.toml in the current directory
+    /// Scaffold a new RPMSPEC.toml
     Init(InitArgs),
     /// Import packaging metadata into a makerpm draft
     Import(ImportArgs),
@@ -81,6 +81,10 @@ pub struct InitArgs {
     /// Package name (defaults to current directory name)
     #[arg(short, long)]
     pub name: Option<String>,
+
+    /// Output directory for RPMSPEC.toml (defaults to the current directory)
+    #[arg(short, long)]
+    pub output: Option<PathBuf>,
 }
 
 #[derive(clap::Args)]
