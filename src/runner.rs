@@ -31,54 +31,68 @@ pub fn run_rpmbuild(topdir: &Path, spec_name: &str) -> Result<(), MakerpmError> 
             source: e,
         })?;
 
-    let stdout = child.stdout.take().ok_or_else(|| MakerpmError::Io {
-        path: PathBuf::from("rpmbuild stdout"),
-        source: std::io::Error::other("failed to capture rpmbuild stdout"),
-    })?;
-    let stdout_thread = thread::spawn(move || {
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| MakerpmError::OperationIo {
+            operation: "capturing rpmbuild stdout",
+            source: std::io::Error::other("failed to capture rpmbuild stdout"),
+        })?;
+    let stdout_thread = thread::spawn(move || -> std::io::Result<()> {
         let reader = BufReader::new(stdout);
         for line in reader.lines() {
-            match line {
-                Ok(l) => println!("{l}"),
-                Err(_) => break,
-            }
+            println!("{}", line?);
         }
+        Ok(())
     });
 
-    let stderr = child.stderr.take().ok_or_else(|| MakerpmError::Io {
-        path: PathBuf::from("rpmbuild stderr"),
-        source: std::io::Error::other("failed to capture rpmbuild stderr"),
-    })?;
-    let stderr_thread = thread::spawn(move || {
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| MakerpmError::OperationIo {
+            operation: "capturing rpmbuild stderr",
+            source: std::io::Error::other("failed to capture rpmbuild stderr"),
+        })?;
+    let stderr_thread = thread::spawn(move || -> std::io::Result<VecDeque<String>> {
         let reader = BufReader::new(stderr);
         let mut tail = VecDeque::new();
         for line in reader.lines() {
-            match line {
-                Ok(l) => {
-                    eprintln!("{l}");
-                    tail.push_back(l);
-                    if tail.len() > STDERR_TAIL_LINES {
-                        tail.pop_front();
-                    }
-                }
-                Err(_) => break,
+            let line = line?;
+            eprintln!("{line}");
+            tail.push_back(line);
+            if tail.len() > STDERR_TAIL_LINES {
+                tail.pop_front();
             }
         }
-        tail
+        Ok(tail)
     });
 
-    let status = child.wait().map_err(|e| MakerpmError::Io {
-        path: PathBuf::from("rpmbuild"),
-        source: e,
-    })?;
+    let status_result = child.wait();
 
-    stdout_thread.join().map_err(|_| MakerpmError::Io {
-        path: PathBuf::from("rpmbuild stdout"),
-        source: std::io::Error::other("rpmbuild stdout reader thread panicked"),
+    // Join both readers before propagating either failure so neither thread is
+    // detached while it still owns a child pipe.
+    let stdout_result = stdout_thread.join();
+    let stderr_result = stderr_thread.join();
+
+    let stdout_result = stdout_result.map_err(|_| MakerpmError::OperationIo {
+        operation: "joining the rpmbuild stdout reader",
+        source: std::io::Error::other("reader thread panicked"),
     })?;
-    let stderr_tail = stderr_thread.join().map_err(|_| MakerpmError::Io {
-        path: PathBuf::from("rpmbuild stderr"),
-        source: std::io::Error::other("rpmbuild stderr reader thread panicked"),
+    let stderr_result = stderr_result.map_err(|_| MakerpmError::OperationIo {
+        operation: "joining the rpmbuild stderr reader",
+        source: std::io::Error::other("reader thread panicked"),
+    })?;
+    stdout_result.map_err(|source| MakerpmError::OperationIo {
+        operation: "reading rpmbuild stdout",
+        source,
+    })?;
+    let stderr_tail = stderr_result.map_err(|source| MakerpmError::OperationIo {
+        operation: "reading rpmbuild stderr",
+        source,
+    })?;
+    let status = status_result.map_err(|source| MakerpmError::OperationIo {
+        operation: "waiting for rpmbuild",
+        source,
     })?;
 
     if !status.success() {

@@ -125,5 +125,6 @@ system = "cmake"
         .success()
         .stderr(predicates::str::contains(
             "adding build requirement for the selected build system",
-        ));
+        ))
+        .stderr(predicates::str::contains("dependency=cmake"));
 }

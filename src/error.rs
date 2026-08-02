@@ -12,10 +12,17 @@ pub enum MakerpmError {
         source: std::io::Error,
     },
 
+    #[error("I/O error while {operation}")]
+    OperationIo {
+        operation: &'static str,
+        #[source]
+        source: std::io::Error,
+    },
+
     #[error("validation failed with {count} error(s)")]
     Validation { count: usize },
 
-    #[error("failed to download {url}")]
+    #[error("failed to download {url}: {source}")]
     Fetch {
         url: String,
         #[source]

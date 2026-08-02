@@ -175,13 +175,12 @@ fn validate_source_filenames(spec: &PkgSpecFile, diags: &mut Vec<Report>) {
             SourceEntry::Local { filename } | SourceEntry::Remote { filename, .. } => filename,
         };
         let path = Path::new(&filename);
-        if filename.is_empty()
-            || path.components().count() != 1
-            || !matches!(
-                path.components().next(),
-                Some(std::path::Component::Normal(_))
-            )
-        {
+        let is_single_exact_component = matches!(
+            path.components().next(),
+            Some(std::path::Component::Normal(component))
+                if path.components().count() == 1 && component == path.as_os_str()
+        );
+        if filename.is_empty() || !is_single_exact_component {
             diags.push(error(format!(
                 "{kind} entry {} resolves to an unsafe filename: {filename:?}; filenames must be a single path component",
                 index + 1

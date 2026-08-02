@@ -1,5 +1,7 @@
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
+use std::process::Stdio;
+use std::time::{Duration, Instant};
 
 use sha2::{Digest, Sha256};
 
@@ -14,13 +16,121 @@ pub trait Downloader: Send + Sync {
     fn download_to(&self, url: &str, dest: &Path) -> Result<u64, MakerpmError>;
 }
 
-/// Real downloader using ureq.
-pub struct UreqDownloader;
+const CURL_CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
+
+#[derive(Debug)]
+enum CurlExit {
+    Success,
+    Failed { status: String, stderr: String },
+    TimedOut,
+}
+
+trait CurlRunner: Send + Sync {
+    fn run(
+        &self,
+        url: &str,
+        dest: &Path,
+        transfer_timeout: Option<Duration>,
+    ) -> std::io::Result<CurlExit>;
+}
+
+struct SystemCurlRunner;
+
+impl CurlRunner for SystemCurlRunner {
+    fn run(
+        &self,
+        url: &str,
+        dest: &Path,
+        transfer_timeout: Option<Duration>,
+    ) -> std::io::Result<CurlExit> {
+        let connect_timeout = CURL_CONNECT_TIMEOUT.as_secs().to_string();
+        let mut command = std::process::Command::new("curl");
+        command.args([
+            "--fail",
+            "--silent",
+            "--show-error",
+            "--location",
+            "--max-redirs",
+            "10",
+            "--connect-timeout",
+            &connect_timeout,
+        ]);
+        let transfer_timeout_arg = transfer_timeout.map(|timeout| timeout.as_secs().to_string());
+        if let Some(timeout) = &transfer_timeout_arg {
+            command.args(["--max-time", timeout]);
+        }
+        let mut child = command
+            .arg("--output")
+            .arg(dest)
+            .arg("--")
+            .arg(url)
+            .stderr(Stdio::piped())
+            .spawn()?;
+        let mut stderr = child
+            .stderr
+            .take()
+            .ok_or_else(|| std::io::Error::other("failed to capture curl stderr"))?;
+
+        let deadline =
+            transfer_timeout.map(|timeout| Instant::now() + timeout + Duration::from_secs(1));
+        loop {
+            if let Some(status) = child.try_wait()? {
+                return curl_exit(status, &mut stderr);
+            }
+            if deadline.is_some_and(|deadline| Instant::now() >= deadline) {
+                if let Some(status) = child.try_wait()? {
+                    return curl_exit(status, &mut stderr);
+                }
+                child.kill()?;
+                child.wait()?;
+                return Ok(CurlExit::TimedOut);
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    }
+}
+
+fn curl_exit(
+    status: std::process::ExitStatus,
+    stderr: &mut impl Read,
+) -> std::io::Result<CurlExit> {
+    let mut stderr_text = String::new();
+    stderr.read_to_string(&mut stderr_text)?;
+    Ok(if status.success() {
+        CurlExit::Success
+    } else {
+        CurlExit::Failed {
+            status: status.to_string(),
+            stderr: stderr_text.trim().to_string(),
+        }
+    })
+}
+
+fn configured_transfer_timeout() -> Option<Duration> {
+    std::env::var("MAKERPM_CURL_TIMEOUT")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .filter(|seconds| *seconds > 0)
+        .map(Duration::from_secs)
+}
+
+/// Real downloader using ureq for HTTP(S) and curl for FTP.
+pub struct UreqDownloader {
+    curl_runner: Box<dyn CurlRunner>,
+}
+
+impl Default for UreqDownloader {
+    fn default() -> Self {
+        Self {
+            curl_runner: Box::new(SystemCurlRunner),
+        }
+    }
+}
 
 impl Downloader for UreqDownloader {
     fn download_to(&self, url: &str, dest: &Path) -> Result<u64, MakerpmError> {
         if url::Url::parse(url).is_ok_and(|parsed| parsed.scheme() == "ftp") {
-            return download_ftp_with_curl(url, dest);
+            return download_ftp_with_curl(url, dest, self.curl_runner.as_ref());
         }
 
         let response = ureq::get(url).call().map_err(|e| MakerpmError::Fetch {
@@ -76,30 +186,45 @@ impl Downloader for UreqDownloader {
     }
 }
 
-fn download_ftp_with_curl(url: &str, dest: &Path) -> Result<u64, MakerpmError> {
-    let status = std::process::Command::new("curl")
-        .args(["--fail", "--location", "--max-redirs", "10", "--output"])
-        .arg(dest)
-        .arg("--")
-        .arg(url)
-        .status()
+fn download_ftp_with_curl(
+    url: &str,
+    dest: &Path,
+    runner: &dyn CurlRunner,
+) -> Result<u64, MakerpmError> {
+    let outcome = runner
+        .run(url, dest, configured_transfer_timeout())
         .map_err(|source| MakerpmError::Fetch {
             url: url.to_string(),
             source: Box::new(source),
         })?;
-    if !status.success() {
-        return Err(MakerpmError::Fetch {
-            url: url.to_string(),
-            source: Box::new(std::io::Error::other(format!(
-                "curl exited with status {status}"
-            ))),
-        });
+    match outcome {
+        CurlExit::Success => {}
+        CurlExit::Failed { status, stderr } => {
+            let details = if stderr.is_empty() {
+                format!("curl exited with {status}")
+            } else {
+                format!("curl exited with {status}: {stderr}")
+            };
+            return Err(MakerpmError::Fetch {
+                url: url.to_string(),
+                source: Box::new(std::io::Error::other(details)),
+            });
+        }
+        CurlExit::TimedOut => {
+            return Err(MakerpmError::Fetch {
+                url: url.to_string(),
+                source: Box::new(std::io::Error::new(
+                    std::io::ErrorKind::TimedOut,
+                    "curl exceeded the configured transfer timeout",
+                )),
+            });
+        }
     }
     std::fs::metadata(dest)
         .map(|metadata| metadata.len())
-        .map_err(|source| MakerpmError::Io {
-            path: dest.to_path_buf(),
-            source,
+        .map_err(|source| MakerpmError::Fetch {
+            url: url.to_string(),
+            source: Box::new(source),
         })
 }
 
@@ -342,6 +467,49 @@ mod tests {
     use std::collections::HashMap;
     use std::sync::{Arc, Mutex};
 
+    enum FakeCurlBehavior {
+        Success(Vec<u8>),
+        Nonzero,
+        MissingOutput,
+        SpawnFailure,
+        Timeout,
+    }
+
+    struct FakeCurlRunner {
+        behavior: FakeCurlBehavior,
+    }
+
+    impl CurlRunner for FakeCurlRunner {
+        fn run(
+            &self,
+            _url: &str,
+            dest: &Path,
+            _transfer_timeout: Option<Duration>,
+        ) -> std::io::Result<CurlExit> {
+            match &self.behavior {
+                FakeCurlBehavior::Success(content) => {
+                    std::fs::write(dest, content)?;
+                    Ok(CurlExit::Success)
+                }
+                FakeCurlBehavior::Nonzero => Ok(CurlExit::Failed {
+                    status: "exit status: 22".into(),
+                    stderr: "server denied access".into(),
+                }),
+                FakeCurlBehavior::MissingOutput => Ok(CurlExit::Success),
+                FakeCurlBehavior::SpawnFailure => {
+                    Err(std::io::Error::new(std::io::ErrorKind::NotFound, "curl"))
+                }
+                FakeCurlBehavior::Timeout => Ok(CurlExit::TimedOut),
+            }
+        }
+    }
+
+    fn ftp_downloader(behavior: FakeCurlBehavior) -> UreqDownloader {
+        UreqDownloader {
+            curl_runner: Box::new(FakeCurlRunner { behavior }),
+        }
+    }
+
     struct MockDownloader {
         calls: Arc<Mutex<Vec<String>>>,
         responses: HashMap<String, Vec<u8>>,
@@ -473,6 +641,73 @@ mod tests {
         let results = fetch_sources(&spec, tmp.path(), &opts, &dl).unwrap();
         assert_eq!(results[0].filename, "data.bin");
         assert_eq!(dl.calls(), vec!["ftp://example.com/data.bin"]);
+    }
+
+    #[test]
+    fn real_ftp_flow_accepts_successful_curl_output() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dest = tmp.path().join("download.part");
+        let downloader = ftp_downloader(FakeCurlBehavior::Success(b"ftp data".to_vec()));
+
+        let written = downloader
+            .download_to("ftp://example.com/data.bin", &dest)
+            .unwrap();
+
+        assert_eq!(written, 8);
+        assert_eq!(std::fs::read(dest).unwrap(), b"ftp data");
+    }
+
+    #[test]
+    fn real_ftp_flow_reports_nonzero_curl_and_cleans_part_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cache_dir = tmp.path().join("cache");
+        let spec = make_spec(vec!["ftp://example.com/data.bin"], vec!["SKIP"]);
+        let opts = opts_with_cache(&cache_dir);
+        let downloader = ftp_downloader(FakeCurlBehavior::Nonzero);
+
+        let result = fetch_sources(&spec, tmp.path(), &opts, &downloader);
+
+        assert!(result.is_err());
+        assert!(format!("{}", result.unwrap_err()).contains("server denied access"));
+        assert!(!cache_dir.join("data.part").exists());
+        assert!(!cache_dir.join("data.bin").exists());
+    }
+
+    #[test]
+    fn real_ftp_flow_rejects_missing_output_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dest = tmp.path().join("missing.part");
+        let downloader = ftp_downloader(FakeCurlBehavior::MissingOutput);
+
+        let result = downloader.download_to("ftp://example.com/data.bin", &dest);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn real_ftp_flow_reports_subprocess_failure() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dest = tmp.path().join("download.part");
+        let downloader = ftp_downloader(FakeCurlBehavior::SpawnFailure);
+
+        let result = downloader.download_to("ftp://example.com/data.bin", &dest);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn real_ftp_flow_reports_timeout() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dest = tmp.path().join("download.part");
+        let downloader = ftp_downloader(FakeCurlBehavior::Timeout);
+
+        let result = downloader.download_to("ftp://example.com/data.bin", &dest);
+
+        assert!(matches!(
+            result,
+            Err(MakerpmError::Fetch { source, .. })
+                if source.downcast_ref::<std::io::Error>().is_some_and(|error| error.kind() == std::io::ErrorKind::TimedOut)
+        ));
     }
 
     #[test]

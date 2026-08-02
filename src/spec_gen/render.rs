@@ -139,6 +139,19 @@ fn should_include_check(spec: &PkgSpecFile) -> bool {
     spec.package.build.steps.check.is_some() && spec.package.build.run_tests != Some(false)
 }
 
+fn contains_manual_patch_directive(prep: &str) -> bool {
+    prep.lines().any(|line| {
+        let Some(directive) = line.split_whitespace().next() else {
+            return false;
+        };
+        directive == "%patch"
+            || directive == "%autopatch"
+            || directive.strip_prefix("%patch").is_some_and(|suffix| {
+                !suffix.is_empty() && suffix.bytes().all(|b| b.is_ascii_digit())
+            })
+    })
+}
+
 fn rpm_escape_filter(
     value: &tera::Value,
     _args: &std::collections::HashMap<String, tera::Value>,
@@ -262,6 +275,14 @@ pub fn render(spec: &PkgSpecFile, injected_build_deps: &[String]) -> Result<Stri
         None => true,
     };
     context.insert("use_default_setup", &use_default_setup);
+    let disable_automatic_patches = spec
+        .package
+        .build
+        .steps
+        .prep
+        .as_deref()
+        .is_some_and(contains_manual_patch_directive);
+    context.insert("disable_automatic_patches", &disable_automatic_patches);
 
     context.insert("changelog", &spec.package.changelog);
 

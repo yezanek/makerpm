@@ -98,7 +98,7 @@ Obsoletes:      {{ dep }}
 
 %prep
 {% if use_default_setup %}
-%autosetup -p1
+%autosetup -p1{% if disable_automatic_patches %} -N{% endif %}
 {% endif %}
 {% if prep_steps %}
 {{ prep_steps }}

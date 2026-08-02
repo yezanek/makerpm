@@ -136,7 +136,7 @@ fn main() -> ExitCode {
                 skip_checksums: args.fetch_flags.skip_checksums,
             };
 
-            let downloader = makerpm::fetch::UreqDownloader;
+            let downloader = makerpm::fetch::UreqDownloader::default();
 
             match makerpm::fetch::fetch_sources(&spec, &toml_dir, &opts, &downloader) {
                 Ok(resolved) => {
@@ -194,7 +194,7 @@ fn main() -> ExitCode {
                 skip_checksums: args.fetch_flags.skip_checksums,
             };
 
-            let downloader = makerpm::fetch::UreqDownloader;
+            let downloader = makerpm::fetch::UreqDownloader::default();
 
             let resolved =
                 match makerpm::fetch::fetch_sources(&spec, &toml_dir, &fetch_opts, &downloader) {
@@ -358,7 +358,7 @@ fn log_injected_dependencies(verbosity: u8, dependencies: &[String]) {
     if verbosity > 0 {
         for dependency in dependencies {
             tracing::info!(
-                dependency,
+                dependency = %dependency,
                 "adding build requirement for the selected build system"
             );
         }

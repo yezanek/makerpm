@@ -224,6 +224,79 @@ paths = ["/usr/bin/patched"]
 }
 
 #[test]
+fn manual_patch_step_disables_automatic_patch_application() {
+    let toml_str = r#"
+[package]
+name = "manually-patched"
+version = "1.0"
+summary = "Manually patched package"
+license = "MIT"
+description = "A package with manual patch handling."
+sources = ["source.tar.gz"]
+patches = ["fix.patch"]
+[package.build.steps]
+prep = "%patch 0 -p1"
+[package.files]
+paths = ["/usr/bin/manually-patched"]
+"#;
+    let spec = parse_pkgspec(toml_str).unwrap();
+    let rendered = spec_gen::render(&spec, &[]).unwrap();
+    assert!(rendered.contains("%autosetup -p1 -N"));
+    assert_eq!(rendered.matches("%patch 0 -p1").count(), 1);
+}
+
+#[test]
+fn autopatch_step_disables_automatic_patch_application() {
+    let spec = spec_with_prep("%autopatch -p1");
+    let rendered = spec_gen::render(&spec, &[]).unwrap();
+    assert!(rendered.contains("%autosetup -p1 -N"));
+    assert_eq!(rendered.matches("%autopatch").count(), 1);
+}
+
+#[test]
+fn escaped_patch_literal_keeps_automatic_patch_application() {
+    let spec = spec_with_prep("echo %%patch");
+    let rendered = spec_gen::render(&spec, &[]).unwrap();
+    assert!(rendered.contains("%autosetup -p1\n"));
+    assert!(!rendered.contains("%autosetup -p1 -N"));
+}
+
+#[test]
+fn numbered_patch_directive_disables_automatic_patch_application() {
+    let spec = spec_with_prep("%patch12 -p1");
+    let rendered = spec_gen::render(&spec, &[]).unwrap();
+    assert!(rendered.contains("%autosetup -p1 -N"));
+}
+
+#[test]
+fn patch_like_suffix_does_not_disable_automatic_patch_application() {
+    let spec = spec_with_prep("%patches");
+    let rendered = spec_gen::render(&spec, &[]).unwrap();
+    assert!(rendered.contains("%autosetup -p1\n"));
+    assert!(!rendered.contains("%autosetup -p1 -N"));
+}
+
+fn spec_with_prep(prep: &str) -> makerpm::model::PkgSpecFile {
+    parse_pkgspec(&format!(
+        r#"
+[package]
+name = "prep-test"
+version = "1.0"
+summary = "Prep test"
+license = "MIT"
+description = "Tests prep directives."
+sources = ["source.tar.gz"]
+patches = ["fix.patch"]
+[package.build.steps]
+prep = {prep:?}
+[package.files]
+paths = ["/usr/bin/prep-test"]
+"#
+    ))
+    .unwrap()
+}
+
+#[test]
 fn subpackage_noarch_inherits_base_value() {
     let toml_str = r#"
 [package]

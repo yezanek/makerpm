@@ -266,3 +266,21 @@ sha256sums = ["SKIP"]
     assert!(result.has_errors());
     assert!(has_diagnostic_matching(&result, "unsafe filename"));
 }
+
+#[test]
+fn trailing_separator_resolved_source_name_is_rejected() {
+    let toml_str = r#"
+[package]
+name = "trailing-separator"
+version = "1.0"
+summary = "Trailing separator"
+license = "MIT"
+description = "Rejects normalized filenames."
+sources = ["data/::https://example.org/data"]
+sha256sums = ["SKIP"]
+"#;
+    let spec = parse_pkgspec(toml_str).unwrap();
+    let result = validate(&spec, Path::new("."));
+    assert!(result.has_errors());
+    assert!(has_diagnostic_matching(&result, "unsafe filename"));
+}
