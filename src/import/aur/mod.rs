@@ -1,6 +1,7 @@
 pub mod deps;
 pub mod pkgbuild_parser;
 
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use thiserror::Error;
@@ -14,6 +15,7 @@ use pkgbuild_parser::{AssignmentValue, ParsedPkgbuild};
 
 const FILES_PLACEHOLDER: &str = "%{_prefix}/TODO_REPLACE_WITH_PACKAGE_FILES";
 const FILES_NOTE: &str = "file list not imported — PKGBUILD package() functions do not declare a structured file list; populate manually after a test build";
+const PKGBUILD_LIMIT: u64 = 16 * 1024 * 1024;
 
 #[derive(Debug, Error)]
 pub enum AurImportError {
@@ -27,6 +29,9 @@ pub enum AurImportError {
         source: std::io::Error,
     },
 
+    #[error("refusing to read PKGBUILD {path}: input exceeds the {limit} byte limit")]
+    InputTooLarge { path: PathBuf, limit: u64 },
+
     #[error("failed to parse PKGBUILD: {0}")]
     Parse(#[from] pkgbuild_parser::ParseError),
 
@@ -38,12 +43,33 @@ pub fn import_pkgbuild(path: &Path) -> Result<ImportDraft, AurImportError> {
     if !path.is_file() {
         return Err(AurImportError::Missing(path.to_path_buf()));
     }
-    let input = std::fs::read_to_string(path).map_err(|source| AurImportError::Read {
+    let input = read_pkgbuild(path, PKGBUILD_LIMIT)?;
+    let parsed = pkgbuild_parser::parse(&input)?;
+    draft_from_parsed(&parsed)
+}
+
+fn read_pkgbuild(path: &Path, limit: u64) -> Result<String, AurImportError> {
+    let file = std::fs::File::open(path).map_err(|source| AurImportError::Read {
         path: path.to_path_buf(),
         source,
     })?;
-    let parsed = pkgbuild_parser::parse(&input)?;
-    draft_from_parsed(&parsed)
+    let mut bytes = Vec::new();
+    file.take(limit + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|source| AurImportError::Read {
+            path: path.to_path_buf(),
+            source,
+        })?;
+    if bytes.len() as u64 > limit {
+        return Err(AurImportError::InputTooLarge {
+            path: path.to_path_buf(),
+            limit,
+        });
+    }
+    String::from_utf8(bytes).map_err(|source| AurImportError::Read {
+        path: path.to_path_buf(),
+        source: std::io::Error::new(std::io::ErrorKind::InvalidData, source),
+    })
 }
 
 pub fn draft_from_parsed(parsed: &ParsedPkgbuild) -> Result<ImportDraft, AurImportError> {
@@ -633,5 +659,17 @@ check() {
             note.field_path == "package.deps.recommends"
                 && note.note.contains("enables shell integration")
         }));
+    }
+
+    #[test]
+    fn rejects_pkgbuilds_over_the_configured_size_limit() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("PKGBUILD");
+        std::fs::write(&path, "12345").unwrap();
+
+        assert!(matches!(
+            read_pkgbuild(&path, 4),
+            Err(AurImportError::InputTooLarge { limit: 4, .. })
+        ));
     }
 }

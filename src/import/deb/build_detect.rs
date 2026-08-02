@@ -16,17 +16,19 @@ pub struct DetectedOverride {
 }
 
 pub fn detect(source_dir: &Path, rules_text: Option<&str>) -> BuildDetection {
-    let system = if source_dir.join("CMakeLists.txt").is_file() {
+    let system = if is_confined_file(source_dir, "CMakeLists.txt") {
         BuildSystem::Cmake
-    } else if source_dir.join("meson.build").is_file() {
+    } else if is_confined_file(source_dir, "meson.build") {
         BuildSystem::Meson
-    } else if source_dir.join("configure.ac").is_file() || source_dir.join("configure").is_file() {
+    } else if is_confined_file(source_dir, "configure.ac")
+        || is_confined_file(source_dir, "configure")
+    {
         BuildSystem::Autotools
-    } else if source_dir.join("Cargo.toml").is_file() {
+    } else if is_confined_file(source_dir, "Cargo.toml") {
         BuildSystem::Cargo
-    } else if source_dir.join("pyproject.toml").is_file() {
+    } else if is_confined_file(source_dir, "pyproject.toml") {
         BuildSystem::PythonPyproject
-    } else if source_dir.join("Makefile").is_file() {
+    } else if is_confined_file(source_dir, "Makefile") {
         BuildSystem::Make
     } else {
         BuildSystem::None
@@ -49,6 +51,15 @@ pub fn detect(source_dir: &Path, rules_text: Option<&str>) -> BuildDetection {
     }
 
     BuildDetection { build, overrides }
+}
+
+fn is_confined_file(source_dir: &Path, name: &str) -> bool {
+    let Ok(source_dir) = source_dir.canonicalize() else {
+        return false;
+    };
+    let path = source_dir.join(name);
+    path.canonicalize()
+        .is_ok_and(|resolved| resolved.starts_with(source_dir) && resolved.is_file())
 }
 
 fn detect_overrides(rules: &str) -> Vec<DetectedOverride> {
@@ -138,5 +149,20 @@ override_dh_auto_install: private prerequisite
         );
         assert_eq!(detection.build.steps.prep, Some(String::new()));
         assert_eq!(detection.build.steps.install, Some(String::new()));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn ignores_marker_symlinks_that_escape_the_source_tree() {
+        use std::os::unix::fs::symlink;
+
+        let directory = tempfile::tempdir().unwrap();
+        let outside = tempfile::NamedTempFile::new().unwrap();
+        symlink(outside.path(), directory.path().join("CMakeLists.txt")).unwrap();
+
+        assert_eq!(
+            detect(directory.path(), None).build.system,
+            BuildSystem::None
+        );
     }
 }
