@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use makerpm::parse::parse_pkgspec;
+use makerpm::parse::parse_rpmspec;
 use makerpm::spec_gen;
 
 fn load_fixture(name: &str) -> makerpm::model::PkgSpecFile {
@@ -9,7 +9,7 @@ fn load_fixture(name: &str) -> makerpm::model::PkgSpecFile {
         .join(name);
     let toml_str = std::fs::read_to_string(&path)
         .unwrap_or_else(|e| panic!("failed to read fixture {name}: {e}"));
-    parse_pkgspec(&toml_str).unwrap_or_else(|e| panic!("failed to parse fixture {name}: {e}"))
+    parse_rpmspec(&toml_str).unwrap_or_else(|e| panic!("failed to parse fixture {name}: {e}"))
 }
 
 #[test]
@@ -63,7 +63,7 @@ date = "2026-07-01"
 packager = "Test User <test@example.org>"
 entries = ["Initial package with %percent signs"]
 "#;
-    let spec = parse_pkgspec(toml_str).unwrap();
+    let spec = parse_rpmspec(toml_str).unwrap();
     let rendered = spec_gen::render(&spec, &[]).unwrap();
     insta::assert_snapshot!(rendered);
 }
@@ -99,7 +99,7 @@ date = "2026-07-26"
 packager = "Test User <test@example.org>"
 entries = ["Initial release"]
 "#;
-    let spec = parse_pkgspec(toml_str).unwrap();
+    let spec = parse_rpmspec(toml_str).unwrap();
     let rendered = spec_gen::render(&spec, &[]).unwrap();
     assert!(rendered.contains("Suggests:"));
     assert!(rendered.contains("Supplements:"));
@@ -128,7 +128,7 @@ date = "2026-07-26"
 packager = "Test User <test@example.org>"
 entries = ["Initial release"]
 "##;
-    let spec = parse_pkgspec(toml_str).unwrap();
+    let spec = parse_rpmspec(toml_str).unwrap();
     let rendered = spec_gen::render(&spec, &[]).unwrap();
     assert!(rendered.contains("%pre\n"));
     assert!(!rendered.contains("-n base-noflags"));
@@ -163,7 +163,7 @@ date = "2026-07-26"
 packager = "Test User <test@example.org>"
 entries = ["Initial release"]
 "##;
-    let spec = parse_pkgspec(toml_str).unwrap();
+    let spec = parse_rpmspec(toml_str).unwrap();
     let rendered = spec_gen::render(&spec, &[]).unwrap();
     assert!(rendered.contains("%pretrans -n interp-pretrans-sub -p /usr/bin/perl\n"));
 }
@@ -191,7 +191,7 @@ preun = "echo preun"
 postun = "echo postun"
 posttrans = "echo posttrans"
 "##;
-    let spec = parse_pkgspec(toml_str).unwrap();
+    let spec = parse_rpmspec(toml_str).unwrap();
     let rendered = spec_gen::render(&spec, &[]).unwrap();
     for directive in ["pretrans", "pre", "post", "preun", "postun", "posttrans"] {
         assert!(
@@ -217,7 +217,7 @@ patches = ["fix.patch"]
 [package.files]
 paths = ["/usr/bin/patched"]
 "#;
-    let spec = parse_pkgspec(toml_str).unwrap();
+    let spec = parse_rpmspec(toml_str).unwrap();
     let rendered = spec_gen::render(&spec, &[]).unwrap();
     assert!(rendered.contains("Patch0:       fix.patch"));
     assert!(rendered.contains("%autosetup -p1"));
@@ -239,7 +239,7 @@ prep = "%patch 0 -p1"
 [package.files]
 paths = ["/usr/bin/manually-patched"]
 "#;
-    let spec = parse_pkgspec(toml_str).unwrap();
+    let spec = parse_rpmspec(toml_str).unwrap();
     let rendered = spec_gen::render(&spec, &[]).unwrap();
     assert!(rendered.contains("%autosetup -p1 -N"));
     assert_eq!(rendered.matches("%patch 0 -p1").count(), 1);
@@ -277,7 +277,7 @@ fn patch_like_suffix_does_not_disable_automatic_patch_application() {
 }
 
 fn spec_with_prep(prep: &str) -> makerpm::model::PkgSpecFile {
-    parse_pkgspec(&format!(
+    parse_rpmspec(&format!(
         r#"
 [package]
 name = "prep-test"
@@ -312,7 +312,7 @@ summary = "Extra docs"
 description = "Extra documentation."
 files.paths = ["/usr/share/docs/extra"]
 "#;
-    let spec = parse_pkgspec(toml_str).unwrap();
+    let spec = parse_rpmspec(toml_str).unwrap();
     let rendered = spec_gen::render(&spec, &[]).unwrap();
     let subpackage = rendered
         .split("%package        extra")

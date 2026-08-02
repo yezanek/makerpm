@@ -2,7 +2,7 @@ use std::path::Path;
 
 use assert_cmd::Command;
 use makerpm::lint::lint;
-use makerpm::parse::parse_pkgspec;
+use makerpm::parse::parse_rpmspec;
 
 fn makerpm() -> Command {
     Command::cargo_bin("makerpm").unwrap()
@@ -11,7 +11,7 @@ fn makerpm() -> Command {
 #[test]
 #[ignore = "requires rpmbuild installed"]
 fn build_hello_world_end_to_end() {
-    let spec_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/hello-world/PKGSPEC.toml");
+    let spec_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/hello-world/RPMSPEC.toml");
     let output_dir = tempfile::tempdir().unwrap();
 
     makerpm()
@@ -45,7 +45,7 @@ fn build_hello_world_end_to_end() {
 #[ignore = "requires rpmbuild and network access"]
 fn build_remote_source_end_to_end() {
     let spec_path =
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/remote-hello/PKGSPEC.toml");
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/remote-hello/RPMSPEC.toml");
     let output_dir = tempfile::tempdir().unwrap();
 
     makerpm()
@@ -93,7 +93,7 @@ sources = ["data.txt"]
 [package.files]
 paths = ["/usr/bin/nope"]
 "#;
-    let spec_path = tmp.path().join("PKGSPEC.toml");
+    let spec_path = tmp.path().join("RPMSPEC.toml");
     std::fs::write(&spec_path, broken_toml).unwrap();
 
     let output_dir = tmp.path().join("rpms");
@@ -108,7 +108,7 @@ paths = ["/usr/bin/nope"]
 }
 
 #[test]
-fn init_creates_valid_pkgspec() {
+fn init_creates_valid_rpmspec() {
     let tmp = tempfile::tempdir().unwrap();
 
     makerpm()
@@ -119,11 +119,11 @@ fn init_creates_valid_pkgspec() {
         .assert()
         .success();
 
-    let toml_path = tmp.path().join("PKGSPEC.toml");
-    assert!(toml_path.exists(), "PKGSPEC.toml should be created");
+    let toml_path = tmp.path().join("RPMSPEC.toml");
+    assert!(toml_path.exists(), "RPMSPEC.toml should be created");
 
     let toml_str = std::fs::read_to_string(&toml_path).unwrap();
-    let spec = parse_pkgspec(&toml_str).expect("init-created TOML should parse");
+    let spec = parse_rpmspec(&toml_str).expect("init-created TOML should parse");
 
     assert_eq!(spec.package.name, "test-pkg");
 

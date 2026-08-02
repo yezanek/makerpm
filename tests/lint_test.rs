@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use makerpm::lint::{lint, LintResult, Severity};
-use makerpm::parse::parse_pkgspec;
+use makerpm::parse::parse_rpmspec;
 
 fn load_fixture(fixture: &str) -> String {
     let path = format!("tests/fixtures/{fixture}");
@@ -10,7 +10,7 @@ fn load_fixture(fixture: &str) -> String {
 
 fn load_and_lint(fixture: &str) -> LintResult {
     let toml_str = load_fixture(fixture);
-    let spec = parse_pkgspec(&toml_str).expect("fixture should parse");
+    let spec = parse_rpmspec(&toml_str).expect("fixture should parse");
     lint(&spec, Path::new("."), &toml_str)
 }
 
@@ -160,7 +160,7 @@ description = "Tests auto-injection."
 [package.build]
 system = "cmake"
 "#;
-    let spec = parse_pkgspec(toml_str).unwrap();
+    let spec = parse_rpmspec(toml_str).unwrap();
     let result = lint(&spec, Path::new("."), toml_str);
     assert!(result.injected_build_deps.contains(&"cmake".to_string()));
     assert!(result.injected_build_deps.contains(&"gcc-c++".to_string()));
@@ -178,7 +178,7 @@ description = "Test"
 patches = ["fix.patch"]
 patch_sha256sums = ["abc", "def"]
 "#;
-    let spec = parse_pkgspec(toml_str).unwrap();
+    let spec = parse_rpmspec(toml_str).unwrap();
     let result = lint(&spec, Path::new("."), toml_str);
     assert!(result.has_errors());
     assert!(has_error(
@@ -209,7 +209,7 @@ files.paths = ["/usr/include/subpkg-build/"]
 [subpackage.deps]
 build_depends = ["cmake"]
 "#;
-    let spec = parse_pkgspec(toml_str).unwrap();
+    let spec = parse_rpmspec(toml_str).unwrap();
     let result = lint(&spec, Path::new("."), toml_str);
     assert!(!result.has_errors());
 }
@@ -225,7 +225,7 @@ license = "MIT"
 description = "Remote source without checksum."
 sources = ["https://example.org/file.tar.gz"]
 "#;
-    let spec = parse_pkgspec(toml_str).unwrap();
+    let spec = parse_rpmspec(toml_str).unwrap();
     let result = lint(&spec, Path::new("."), toml_str);
     assert!(result.has_unverified_sources);
 }
@@ -242,7 +242,7 @@ description = "Remote source with checksum."
 sources = ["https://example.org/file.tar.gz"]
 sha256sums = ["9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a00"]
 "#;
-    let spec = parse_pkgspec(toml_str).unwrap();
+    let spec = parse_rpmspec(toml_str).unwrap();
     let result = lint(&spec, Path::new("."), toml_str);
     assert!(!result.has_unverified_sources);
 }
@@ -259,7 +259,7 @@ description = "Duplicate resolved source names."
 sources = ["https://one.example/data.tar.gz", "https://two.example/data.tar.gz"]
 sha256sums = ["SKIP", "SKIP"]
 "#;
-    let spec = parse_pkgspec(toml_str).unwrap();
+    let spec = parse_rpmspec(toml_str).unwrap();
     let result = lint(&spec, Path::new("."), toml_str);
     assert!(result.has_errors());
     assert!(has_error(&result, "resolved filename"));
@@ -277,7 +277,7 @@ description = "Unsafe resolved source name."
 sources = ["../data::https://example.org/data"]
 sha256sums = ["SKIP"]
 "#;
-    let spec = parse_pkgspec(toml_str).unwrap();
+    let spec = parse_rpmspec(toml_str).unwrap();
     let result = lint(&spec, Path::new("."), toml_str);
     assert!(result.has_errors());
     assert!(has_error(&result, "unsafe filename"));
@@ -295,7 +295,7 @@ description = "Rejects normalized filenames."
 sources = ["data/::https://example.org/data"]
 sha256sums = ["SKIP"]
 "#;
-    let spec = parse_pkgspec(toml_str).unwrap();
+    let spec = parse_rpmspec(toml_str).unwrap();
     let result = lint(&spec, Path::new("."), toml_str);
     assert!(result.has_errors());
     assert!(has_error(&result, "unsafe filename"));

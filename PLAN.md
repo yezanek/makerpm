@@ -9,7 +9,7 @@ packaging format, for manual review before building.
 makerpm build  package.toml
 makerpm lint   package.toml
 makerpm import deb ./path/to/debian/source/ -o package.toml
-makerpm import aur ./PKGBUILD -o package.toml
+makerpm import arch ./PKGBUILD -o package.toml
 ```
 
 ---
@@ -26,7 +26,7 @@ makerpm import aur ./PKGBUILD -o package.toml
    Debian source package directory (i.e. `dpkg-source -x` has already been
    run; `debian/` sits next to the upstream source tree) and emits a draft
    `package.toml`.
-4. `makerpm import aur <PKGBUILD> -o <path>` — parses a `PKGBUILD` file and
+4. `makerpm import arch <PKGBUILD> -o <path>` — parses a `PKGBUILD` file and
    emits a draft `package.toml`.
 
 ### Explicit non-goals for v2
@@ -58,11 +58,14 @@ makerpm import aur ./PKGBUILD -o package.toml
 
 ## 2. CLI restructure (breaking change from v1)
 
-v1 used `--spec-file PKGSPEC.toml` (defaulting to `./PKGSPEC.toml`) on every
-subcommand. v2 switches to a positional path argument to match the shape
-requested for v2 and to read more naturally as a verb-object command, the
-way `makepkg`/`dpkg-buildpackage`-adjacent tools typically don't need a
-flag for the one file they obviously operate on.
+v1 used the filename `PKGSPEC.toml`, passed through `--spec-file` and
+defaulting to `./PKGSPEC.toml` on every subcommand. v2 renames the canonical
+project file to `RPMSPEC.toml` so its purpose is immediately recognizable as
+RPM-specific; the TOML schema itself is unchanged by this naming transition.
+At the same time, v2 switches to a positional path argument to match the shape
+requested for v2 and to read more naturally as a verb-object command, the way
+`makepkg`/`dpkg-buildpackage`-adjacent tools typically don't need a flag for
+the one file they obviously operate on.
 
 ```
 makerpm build <PATH> [--output-dir DIR] [--offline] [--refetch]
@@ -72,15 +75,16 @@ makerpm fetch <PATH> [--offline] [--refetch]
 makerpm spec  <PATH> [--output FILE]
 makerpm init  [--name NAME] [-o PATH]
 makerpm import deb <SOURCE_DIR> -o <PATH> [--force]
-makerpm import aur <PKGBUILD_PATH> -o <PATH> [--force]
+makerpm import arch <PKGBUILD_PATH> -o <PATH> [--force]
 ```
 
-- `<PATH>` defaults to `./PKGSPEC.toml` when omitted, same default as v1.
+- `<PATH>` defaults to `./RPMSPEC.toml` when omitted; only the canonical
+  filename changes from v1's `./PKGSPEC.toml`.
 - `validate` is renamed to `lint`; keep `validate` as a hidden alias for one
   release (`#[command(alias = "validate")]` in `clap`) so v1 muscle memory
   and any scripts aren't broken outright.
 - `import`'s `-o <PATH>` is required (no sensible default — importers
-  should never silently overwrite `./PKGSPEC.toml`); `--force` is required
+  should never silently overwrite `./RPMSPEC.toml`); `--force` is required
   to overwrite an existing file at `-o`'s path, otherwise error out.
 - This is the first task of Phase 5 (§7) since every other v2 piece hangs
   off subcommand structure.
@@ -141,7 +145,7 @@ importing user's privileges. A tool whose explicit purpose is to ingest
 safely do this. This is a hard constraint carried over from the v1 QA
 prompt's security stance and applies with more force here:
 
-- `import aur` parses `PKGBUILD` as **text**, using a restricted grammar
+- `import arch` parses `PKGBUILD` as **text**, using a restricted grammar
   (§6.1) that recognizes only variable assignments and named function
   bodies as opaque text blocks. It never invokes `bash`.
 - `import deb` never executes `debian/rules`. Build-system detection is
@@ -369,7 +373,7 @@ site-packages paths, docdir naming). Rather than emit confidently-wrong
 
 ---
 
-## 6. `makerpm import aur` design
+## 6. `makerpm import arch` design
 
 ### 6.1 Restricted `PKGBUILD` parser
 
@@ -470,7 +474,7 @@ src/
 │   │   ├── changelog.rs        # debian/changelog parser
 │   │   ├── build_detect.rs     # §5.3 marker-file heuristic
 │   │   └── deps.rs             # §5.4 name-translation heuristics
-│   └── aur/
+│   └── arch/
 │       ├── mod.rs
 │       ├── pkgbuild_parser.rs  # §6.1 restricted grammar parser
 │       └── deps.rs             # PKGBUILD-side version-constraint translation
@@ -501,7 +505,7 @@ not rewritten.
 - **`lint.rs`**: extend v1's per-rule fixture pattern (§5 of plan v1) with
   one fixture per new `Warning`-severity rule from §3, plus a test
   confirming `--strict` changes the exit code appropriately.
-- **Round-trip sanity test**: `makerpm import aur` on a fixture PKGBUILD →
+- **Round-trip sanity test**: `makerpm import arch` on a fixture PKGBUILD →
   `makerpm lint` on the result → confirm it exits 0 (no `Error`-severity
   findings) even though `Warning`-severity TODO-related findings are
   expected and fine. This is the actual end-to-end promise of the
@@ -519,7 +523,7 @@ new warning rules). No importer code yet.
 **Prompt:**
 > Implement Phase 5 of the makerpm v2 plan: restructure the CLI (§2) so
 > `build`, `lint`, `fetch`, and `spec` take a positional `<PATH>` argument
-> defaulting to `./PKGSPEC.toml`, and rename `validate` to `lint` while
+> defaulting to `./RPMSPEC.toml`, and rename `validate` to `lint` while
 > keeping `validate` as a hidden `clap` alias. Rework the old `validate.rs`
 > into `lint.rs`: introduce `Severity`/`LintFinding` types (§3), migrate
 > every v1 validation rule to `Severity::Error` unchanged in behavior, and
@@ -609,13 +613,13 @@ value, not real Debian/PKGBUILD input.
       passes v1's `parse.rs` cleanly and whose `Confident`-vs-not field
       counts look reasonable on manual inspection.
 
-### Phase 8 — `import aur`
+### Phase 8 — `import arch`
 
-**Covers:** §6 in full, `import/aur/*`. Depends on Phase 6; independent of
+**Covers:** §6 in full, `import/arch/*`. Depends on Phase 6; independent of
 Phase 7 (can run in parallel with it if desired).
 
 **Prompt:**
-> Implement Phase 8 of the makerpm v2 plan: `makerpm import aur
+> Implement Phase 8 of the makerpm v2 plan: `makerpm import arch
 > <PKGBUILD> -o <path>` (§6), building on Phase 6's shared infrastructure.
 > Implement `pkgbuild_parser.rs` as a restricted, non-executing grammar
 > parser per §6.1 — it must recognize scalar/array variable assignments
@@ -649,9 +653,9 @@ Phase 7 (can run in parallel with it if desired).
       `Unsupported` note about the untranslated additional package names,
       not a silent single-package import that drops them.
 - [ ] Running the full importer against a real (small, permissively
-      licensed) AUR PKGBUILD produces a `.toml` that passes v1's
+      licensed) Arch PKGBUILD produces a `.toml` that passes v1's
       `parse.rs` cleanly.
-- [ ] The round-trip sanity test from §9 (`import aur` → `lint` → exit 0
+- [ ] The round-trip sanity test from §9 (`import arch` → `lint` → exit 0
       despite warnings) passes for at least one real fixture.
 
 Once Phase 8's checklist is green, v2's four-subcommand surface (§1) is
@@ -671,7 +675,7 @@ security section:
 > - **No execution of input files.** Grep the entire `import/` module tree
 >   for any invocation of a shell/process (`Command::new`, `std::process`,
 >   any crate that shells out) — there should be none. `import deb` must
->   never execute or `source` `debian/rules`; `import aur` must never
+>   never execute or `source` `debian/rules`; `import arch` must never
 >   execute or `source` the `PKGBUILD`. This is the single most important
 >   security property of this release; treat any violation as critical
 >   severity regardless of how contained or "just for detection" it might

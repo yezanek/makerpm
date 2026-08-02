@@ -20,7 +20,7 @@ fn load_and_lint(spec_file: &std::path::Path) -> EarlyReturn {
         }
     };
 
-    let spec = match makerpm::parse::parse_pkgspec(&toml_str) {
+    let spec = match makerpm::parse::parse_rpmspec(&toml_str) {
         Ok(s) => s,
         Err(e) => {
             let report = miette::Report::new(e);
@@ -316,7 +316,7 @@ entries = ["Initial package"]
                 date = today_utc(),
             );
 
-            let path = std::path::PathBuf::from("PKGSPEC.toml");
+            let path = std::path::PathBuf::from("RPMSPEC.toml");
             match std::fs::OpenOptions::new()
                 .write(true)
                 .create_new(true)
@@ -339,8 +339,8 @@ entries = ["Initial package"]
         }
 
         makerpm::cli::Commands::Import(args) => match args.command {
-            makerpm::cli::ImportCommands::Aur(args) => {
-                let draft = match makerpm::import::aur::import_pkgbuild(&args.pkgbuild) {
+            makerpm::cli::ImportCommands::Arch(args) => {
+                let draft = match makerpm::import::arch::import_pkgbuild(&args.pkgbuild) {
                     Ok(draft) => draft,
                     Err(error) => {
                         eprintln!("Error: {error}");
@@ -358,7 +358,7 @@ entries = ["Initial package"]
                 match result {
                     Ok(_) => {
                         eprintln!(
-                            "Note: AUR file lists and .install scriptlets were not imported; populate them after a test build."
+                            "Note: Arch file lists and .install scriptlets were not imported; populate them after a test build."
                         );
                         ExitCode::SUCCESS
                     }

@@ -2,7 +2,7 @@
 
 A command-line tool for building RPM packages from a single TOML file.
 Inspired by Arch Linux's `makepkg`/`PKGBUILD` workflow, `makerpm` reads a
-`PKGSPEC.toml`, validates it, downloads and checksum-verifies any declared
+`RPMSPEC.toml`, validates it, downloads and checksum-verifies any declared
 remote sources, transpiles the spec into a standard RPM `.spec` file, and
 invokes `rpmbuild` to produce the final `.rpm` files — all in one command.
 
@@ -30,10 +30,10 @@ cargo install --path .
 ## Quick start
 
 ```sh
-# Scaffold a starter PKGSPEC.toml (uses the directory name as the package name)
+# Scaffold a starter RPMSPEC.toml (uses the directory name as the package name)
 makerpm init
 
-# Edit PKGSPEC.toml with your package details, then build:
+# Edit RPMSPEC.toml with your package details, then build:
 makerpm build
 
 # RPMs are written to ./rpms/ by default (override with --output-dir)
@@ -49,12 +49,12 @@ makerpm fetch [PATH] [FLAGS]
 makerpm lint  [PATH] [--strict]
 makerpm init [--name NAME]
 makerpm import deb <SOURCE_DIR> -o <PATH> [--force]
-makerpm import aur <PKGBUILD> -o <PATH> [--force]
+makerpm import arch <PKGBUILD> -o <PATH> [--force]
 ```
 
 `-v`, `-vv`, and `--verbose` are global options and work with every subcommand.
 
-`PATH` defaults to `./PKGSPEC.toml` in the current directory. The former
+`PATH` defaults to `./RPMSPEC.toml` in the current directory. The former
 `validate` command remains available as a hidden alias for `lint`.
 
 **Subcommands:**
@@ -65,9 +65,9 @@ makerpm import aur <PKGBUILD> -o <PATH> [--force]
 | `spec` | Render the `.spec` file only (no download, no build) |
 | `fetch` | Download and verify remote sources without building |
 | `lint` | Parse and lint the TOML; `--strict` also fails on warnings |
-| `init` | Create a starter `PKGSPEC.toml` in the current directory |
+| `init` | Create a starter `RPMSPEC.toml` in the current directory |
 | `import deb` | Convert extracted Debian source metadata into an annotated makerpm draft |
-| `import aur` | Convert a PKGBUILD into an annotated makerpm draft without executing shell code |
+| `import arch` | Convert a PKGBUILD into an annotated makerpm draft without executing shell code |
 
 **Build/fetch flags:**
 
@@ -82,7 +82,7 @@ FTP transfers have no total-duration limit by default. Set
 `MAKERPM_CURL_TIMEOUT` to a positive number of seconds to enforce one;
 connection attempts always time out after 30 seconds.
 
-## PKGSPEC.toml format
+## RPMSPEC.toml format
 
 ```toml
 [package]

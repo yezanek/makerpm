@@ -15,11 +15,11 @@ fn lint_clean_fixture_exits_zero() {
 }
 
 #[test]
-fn lint_defaults_to_pkgspec_in_current_directory() {
+fn lint_defaults_to_rpmspec_in_current_directory() {
     let directory = tempfile::tempdir().unwrap();
     std::fs::copy(
         "tests/fixtures/valid_minimal.toml",
-        directory.path().join("PKGSPEC.toml"),
+        directory.path().join("RPMSPEC.toml"),
     )
     .unwrap();
 
@@ -150,7 +150,7 @@ fn fetch_with_allow_unverified_passes_validation_gate() {
 #[test]
 fn verbose_spec_reports_injected_build_dependencies() {
     let directory = tempfile::tempdir().unwrap();
-    let spec_path = directory.path().join("PKGSPEC.toml");
+    let spec_path = directory.path().join("RPMSPEC.toml");
     std::fs::write(
         &spec_path,
         r#"
@@ -177,16 +177,16 @@ system = "cmake"
 }
 
 #[test]
-fn import_aur_writes_annotated_draft_without_executing_pkgbuild() {
+fn import_arch_writes_annotated_draft_without_executing_pkgbuild() {
     let directory = tempfile::tempdir().unwrap();
     let pkgbuild = directory.path().join("PKGBUILD");
     let output = directory.path().join("package.toml");
     std::fs::write(
         &pkgbuild,
-        r#"pkgname=cli-aur-import
+        r#"pkgname=cli-arch-import
 pkgver=$(printf 'this must stay literal')
 pkgrel=1
-pkgdesc='CLI AUR import fixture with a sufficiently detailed summary'
+pkgdesc='CLI Arch import fixture with a sufficiently detailed summary'
 arch=('any')
 license=('MIT')
 source=('https://example.test/source.tar.gz')
@@ -197,7 +197,7 @@ package() { install -Dm755 app "$pkgdir/usr/bin/app"; }
     .unwrap();
 
     makerpm()
-        .args(["import", "aur"])
+        .args(["import", "arch"])
         .arg(&pkgbuild)
         .arg("-o")
         .arg(&output)

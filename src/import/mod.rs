@@ -9,7 +9,7 @@ use toml_edit::{DocumentMut, Table};
 
 use crate::model::PkgSpecFile;
 
-pub mod aur;
+pub mod arch;
 pub mod deb;
 
 #[derive(Debug)]
@@ -108,13 +108,27 @@ pub fn render_import_draft(draft: &ImportDraft) -> Result<String, ImportError> {
     for (field_path, notes) in annotations {
         let comment = notes
             .into_iter()
-            .flat_map(|note| note.lines())
-            .map(|line| format!("# TODO: {line}\n"))
+            .flat_map(|note| note.split(['\r', '\n']))
+            .map(|line| format!("# TODO: {}\n", sanitize_comment_line(line)))
             .collect::<String>();
         annotate_field(&mut document, field_path, &comment)?;
     }
 
-    Ok(document.to_string())
+    let rendered = document.to_string();
+    rendered.parse::<DocumentMut>()?;
+    Ok(rendered)
+}
+
+fn sanitize_comment_line(line: &str) -> String {
+    let mut sanitized = String::with_capacity(line.len());
+    for character in line.chars() {
+        if character.is_control() && character != '\t' {
+            sanitized.extend(character.escape_default());
+        } else {
+            sanitized.push(character);
+        }
+    }
+    sanitized
 }
 
 pub fn write_import_draft(
@@ -238,6 +252,13 @@ fn annotate_table(
     }
 
     if remaining.is_empty() {
+        if let Some(child) = table
+            .get_mut(segment.key)
+            .and_then(toml_edit::Item::as_table_mut)
+        {
+            child.decor_mut().set_prefix(comment);
+            return Ok(());
+        }
         let mut key = table
             .key_mut(segment.key)
             .ok_or_else(|| ImportError::UnknownFieldPath(field_path.to_string()))?;
@@ -259,7 +280,7 @@ mod tests {
         BuildSpec, BuildSteps, BuildSystem, ChangelogEntry, DependencySet, FilesSpec, Package,
         Scriptlets, Subpackage,
     };
-    use crate::parse::parse_pkgspec;
+    use crate::parse::parse_rpmspec;
 
     fn hand_built_draft() -> ImportDraft {
         ImportDraft {
@@ -338,7 +359,7 @@ mod tests {
     fn writer_round_trips_and_annotates_only_non_confident_fields() {
         let rendered = render_import_draft(&hand_built_draft()).unwrap();
 
-        let parsed = parse_pkgspec(&rendered).expect("written draft should parse as a PKGSPEC");
+        let parsed = parse_rpmspec(&rendered).expect("written draft should parse as an RPMSPEC");
         assert_eq!(parsed.package.name, "imported-package");
         assert_eq!(parsed.package.build.system, BuildSystem::Cmake);
         assert_eq!(parsed.subpackages[0].suffix, "devel");
@@ -363,7 +384,7 @@ mod tests {
 
         write_import_draft(&hand_built_draft(), &output, true).unwrap();
         let rendered = std::fs::read_to_string(&output).unwrap();
-        parse_pkgspec(&rendered).expect("forced output should contain the replacement draft");
+        parse_rpmspec(&rendered).expect("forced output should contain the replacement draft");
     }
 
     #[test]
@@ -402,5 +423,37 @@ mod tests {
             render_import_draft(&draft),
             Err(ImportError::UnknownFieldPath(path)) if path == "package.missing"
         ));
+    }
+
+    #[test]
+    fn writer_places_attacker_controlled_table_notes_outside_table_headers() {
+        let mut draft = hand_built_draft();
+        draft.notes.push(ImportNote {
+            field_path: "package.scriptlets".to_string(),
+            note: "referenced evil.install\n[injected]\rowned = true\0".to_string(),
+            confidence: Confidence::Unsupported,
+        });
+
+        let rendered = render_import_draft(&draft).unwrap();
+        let parsed = parse_rpmspec(&rendered).expect("decorated output must remain valid TOML");
+
+        assert!(rendered.contains(
+            "# TODO: referenced evil.install\n# TODO: [injected]\n# TODO: owned = true\\u{0}\n[package.scriptlets]"
+        ));
+        assert_eq!(parsed.package.name, "imported-package");
+        assert!(!rendered.contains("\n[injected]\n"));
+    }
+
+    #[test]
+    fn writer_escapes_toml_metacharacters_in_imported_values() {
+        let mut draft = hand_built_draft();
+        draft.spec.package.name = "safe\"\n[injected]\nowned = true".to_string();
+        draft.spec.package.description = "''' \"\"\" # [table] \\".to_string();
+
+        let rendered = render_import_draft(&draft).unwrap();
+        let parsed = parse_rpmspec(&rendered).expect("serialized values must not escape strings");
+
+        assert_eq!(parsed.package.name, draft.spec.package.name);
+        assert_eq!(parsed.package.description, draft.spec.package.description);
     }
 }

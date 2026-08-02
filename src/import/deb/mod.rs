@@ -3,6 +3,7 @@ pub mod changelog;
 pub mod control;
 pub mod deps;
 
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use thiserror::Error;
@@ -15,6 +16,9 @@ use super::{Confidence, ImportDraft, ImportNote};
 
 const FILES_PLACEHOLDER_PREFIX: &str = "%{_prefix}/TODO_REPLACE_WITH_";
 const FILES_NOTE: &str = "file list not imported — Debian and Fedora filesystem layouts differ; populate manually after a test build";
+const CONTROL_LIMIT: u64 = 8 * 1024 * 1024;
+const CHANGELOG_LIMIT: u64 = 32 * 1024 * 1024;
+const OPTIONAL_METADATA_LIMIT: u64 = 8 * 1024 * 1024;
 
 #[derive(Debug, Error)]
 pub enum DebImportError {
@@ -28,6 +32,12 @@ pub enum DebImportError {
         source: std::io::Error,
     },
 
+    #[error("refusing to read {path}: resolved path is outside the Debian source directory")]
+    OutsideSource { path: PathBuf },
+
+    #[error("refusing to read {path}: input exceeds the {limit} byte limit")]
+    InputTooLarge { path: PathBuf, limit: u64 },
+
     #[error("failed to parse debian/control: {0}")]
     Control(#[from] control::ControlError),
 
@@ -36,11 +46,15 @@ pub enum DebImportError {
 }
 
 pub fn import_debian_source(source_dir: &Path) -> Result<ImportDraft, DebImportError> {
+    let source_dir = std::fs::canonicalize(source_dir).map_err(|source| DebImportError::Read {
+        path: source_dir.to_path_buf(),
+        source,
+    })?;
     let debian_dir = source_dir.join("debian");
     let control_path = debian_dir.join("control");
     let changelog_path = debian_dir.join("changelog");
-    let control_text = read_required(&control_path)?;
-    let changelog_text = read_required(&changelog_path)?;
+    let control_text = read_required(&source_dir, &control_path, CONTROL_LIMIT)?;
+    let changelog_text = read_required(&source_dir, &changelog_path, CHANGELOG_LIMIT)?;
     let control = control::parse(&control_text)?;
     let debian_changelog = changelog::parse(&changelog_text)?;
     let latest_version = changelog::split_version(&debian_changelog[0].version)?;
@@ -112,7 +126,7 @@ pub fn import_debian_source(source_dir: &Path) -> Result<ImportDraft, DebImportE
         );
     }
 
-    let (license, license_confidence, license_note) = import_license(&debian_dir)?;
+    let (license, license_confidence, license_note) = import_license(&source_dir, &debian_dir)?;
     note(
         &mut notes,
         "package.license",
@@ -144,8 +158,8 @@ pub fn import_debian_source(source_dir: &Path) -> Result<ImportDraft, DebImportE
     );
 
     let rules_path = debian_dir.join("rules");
-    let rules_text = read_optional(&rules_path)?;
-    let detection = build_detect::detect(source_dir, rules_text.as_deref());
+    let rules_text = read_optional(&source_dir, &rules_path, OPTIONAL_METADATA_LIMIT)?;
+    let detection = build_detect::detect(&source_dir, rules_text.as_deref());
     note(
         &mut notes,
         "package.build.system",
@@ -307,28 +321,67 @@ pub fn import_debian_source(source_dir: &Path) -> Result<ImportDraft, DebImportE
     })
 }
 
-fn read_required(path: &Path) -> Result<String, DebImportError> {
+fn read_required(root: &Path, path: &Path, limit: u64) -> Result<String, DebImportError> {
     if !path.is_file() {
         return Err(DebImportError::NotDebianSource {
             path: path.to_path_buf(),
         });
     }
-    std::fs::read_to_string(path).map_err(|source| DebImportError::Read {
-        path: path.to_path_buf(),
-        source,
-    })
+    let resolved = confined_path(root, path)?;
+    read_limited(&resolved, path, limit)
 }
 
-fn read_optional(path: &Path) -> Result<Option<String>, DebImportError> {
+fn read_optional(root: &Path, path: &Path, limit: u64) -> Result<Option<String>, DebImportError> {
     if !path.exists() {
         return Ok(None);
     }
-    std::fs::read_to_string(path)
-        .map(Some)
-        .map_err(|source| DebImportError::Read {
+    let resolved = confined_path(root, path)?;
+    read_limited(&resolved, path, limit).map(Some)
+}
+
+fn confined_path(root: &Path, path: &Path) -> Result<PathBuf, DebImportError> {
+    let root = std::fs::canonicalize(root).map_err(|source| DebImportError::Read {
+        path: root.to_path_buf(),
+        source,
+    })?;
+    let resolved = std::fs::canonicalize(path).map_err(|source| DebImportError::Read {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    if !resolved.starts_with(&root) {
+        return Err(DebImportError::OutsideSource {
             path: path.to_path_buf(),
+        });
+    }
+    Ok(resolved)
+}
+
+fn read_limited(
+    resolved: &Path,
+    display_path: &Path,
+    limit: u64,
+) -> Result<String, DebImportError> {
+    let file = std::fs::File::open(resolved).map_err(|source| DebImportError::Read {
+        path: display_path.to_path_buf(),
+        source,
+    })?;
+    let mut bytes = Vec::new();
+    file.take(limit + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|source| DebImportError::Read {
+            path: display_path.to_path_buf(),
             source,
-        })
+        })?;
+    if bytes.len() as u64 > limit {
+        return Err(DebImportError::InputTooLarge {
+            path: display_path.to_path_buf(),
+            limit,
+        });
+    }
+    String::from_utf8(bytes).map_err(|source| DebImportError::Read {
+        path: display_path.to_path_buf(),
+        source: std::io::Error::new(std::io::ErrorKind::InvalidData, source),
+    })
 }
 
 fn sanitize_upstream_version(version: &str) -> (String, Confidence, String) {
@@ -367,9 +420,12 @@ fn import_dependencies(
     }
 }
 
-fn import_license(debian_dir: &Path) -> Result<(String, Confidence, String), DebImportError> {
+fn import_license(
+    root: &Path,
+    debian_dir: &Path,
+) -> Result<(String, Confidence, String), DebImportError> {
     let copyright_path = debian_dir.join("copyright");
-    let Some(copyright) = read_optional(&copyright_path)? else {
+    let Some(copyright) = read_optional(root, &copyright_path, OPTIONAL_METADATA_LIMIT)? else {
         return Ok((
             "LicenseRef-UNKNOWN".to_string(),
             Confidence::Unsupported,
@@ -468,7 +524,7 @@ mod tests {
     use super::*;
     use crate::import::render_import_draft;
     use crate::lint::lint;
-    use crate::parse::parse_pkgspec;
+    use crate::parse::parse_rpmspec;
 
     const CONTROL: &str = r#"Source: sample
 Maintainer: Jane Doe <jane@example.org>
@@ -592,7 +648,7 @@ sample (1.5-1) stable; urgency=low
         assert_eq!(dependency_note_count, dependency_count);
 
         let rendered = render_import_draft(&draft).unwrap();
-        let reparsed = parse_pkgspec(&rendered).expect("imported TOML should parse cleanly");
+        let reparsed = parse_rpmspec(&rendered).expect("imported TOML should parse cleanly");
         assert_eq!(reparsed.package.name, "sample");
         let lint_result = lint(&reparsed, directory.path(), &rendered);
         assert!(
@@ -609,7 +665,7 @@ sample (1.5-1) stable; urgency=low
     fn maps_known_license_and_flags_multiple_license_stanzas() {
         let directory = tempfile::tempdir().unwrap();
         std::fs::write(directory.path().join("copyright"), "License: GPL-2+\n").unwrap();
-        let (license, confidence, _) = import_license(directory.path()).unwrap();
+        let (license, confidence, _) = import_license(directory.path(), directory.path()).unwrap();
         assert_eq!(license, "GPL-2.0-or-later");
         assert_eq!(confidence, Confidence::BestEffort);
 
@@ -618,9 +674,40 @@ sample (1.5-1) stable; urgency=low
             "Files: *\nLicense: MIT\n\nFiles: vendor/*\nLicense: Apache-2.0\n",
         )
         .unwrap();
-        let (license, confidence, note) = import_license(directory.path()).unwrap();
+        let (license, confidence, note) =
+            import_license(directory.path(), directory.path()).unwrap();
         assert_eq!(license, "MIT");
         assert_eq!(confidence, Confidence::Unsupported);
         assert!(note.contains("multiple Debian license stanzas"));
+    }
+
+    #[test]
+    fn rejects_metadata_over_the_configured_size_limit() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("control");
+        std::fs::write(&path, "12345").unwrap();
+
+        assert!(matches!(
+            read_required(directory.path(), &path, 4),
+            Err(DebImportError::InputTooLarge { limit: 4, .. })
+        ));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_required_metadata_symlinks_that_escape_the_source_tree() {
+        use std::os::unix::fs::symlink;
+
+        let source = tempfile::tempdir().unwrap();
+        let outside = tempfile::NamedTempFile::new().unwrap();
+        let debian = source.path().join("debian");
+        std::fs::create_dir(&debian).unwrap();
+        let control = debian.join("control");
+        symlink(outside.path(), &control).unwrap();
+
+        assert!(matches!(
+            read_required(source.path(), &control, CONTROL_LIMIT),
+            Err(DebImportError::OutsideSource { path }) if path == control
+        ));
     }
 }

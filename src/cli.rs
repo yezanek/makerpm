@@ -15,16 +15,16 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
-    /// Lint a PKGSPEC.toml without building or fetching
+    /// Lint an RPMSPEC.toml without building or fetching
     #[command(alias = "validate")]
     Lint(LintArgs),
-    /// Render the RPM spec file from a PKGSPEC.toml
+    /// Render the RPM spec file from an RPMSPEC.toml
     Spec(SpecArgs),
     /// Download remote sources declared in the spec
     Fetch(FetchArgs),
-    /// Build RPMs from a PKGSPEC.toml
+    /// Build RPMs from an RPMSPEC.toml
     Build(BuildArgs),
-    /// Scaffold a new PKGSPEC.toml in the current directory
+    /// Scaffold a new RPMSPEC.toml in the current directory
     Init(InitArgs),
     /// Import packaging metadata into a makerpm draft
     Import(ImportArgs),
@@ -32,8 +32,8 @@ pub enum Commands {
 
 #[derive(clap::Args)]
 pub struct LintArgs {
-    /// Path to PKGSPEC.toml
-    #[arg(default_value = "./PKGSPEC.toml")]
+    /// Path to RPMSPEC.toml
+    #[arg(default_value = "./RPMSPEC.toml")]
     pub path: PathBuf,
 
     /// Treat warnings as failures
@@ -43,8 +43,8 @@ pub struct LintArgs {
 
 #[derive(clap::Args)]
 pub struct SpecArgs {
-    /// Path to PKGSPEC.toml
-    #[arg(default_value = "./PKGSPEC.toml")]
+    /// Path to RPMSPEC.toml
+    #[arg(default_value = "./RPMSPEC.toml")]
     pub path: PathBuf,
 
     /// Output file path (prints to stdout if omitted)
@@ -54,8 +54,8 @@ pub struct SpecArgs {
 
 #[derive(clap::Args)]
 pub struct FetchArgs {
-    /// Path to PKGSPEC.toml
-    #[arg(default_value = "./PKGSPEC.toml")]
+    /// Path to RPMSPEC.toml
+    #[arg(default_value = "./RPMSPEC.toml")]
     pub path: PathBuf,
 
     #[command(flatten)]
@@ -64,8 +64,8 @@ pub struct FetchArgs {
 
 #[derive(clap::Args)]
 pub struct BuildArgs {
-    /// Path to PKGSPEC.toml
-    #[arg(default_value = "./PKGSPEC.toml")]
+    /// Path to RPMSPEC.toml
+    #[arg(default_value = "./RPMSPEC.toml")]
     pub path: PathBuf,
 
     /// Output directory for built RPMs (default: ./rpms/)
@@ -92,13 +92,13 @@ pub struct ImportArgs {
 #[derive(Subcommand)]
 pub enum ImportCommands {
     /// Import an Arch Linux PKGBUILD without executing it
-    Aur(AurImportArgs),
+    Arch(ArchImportArgs),
     /// Import an extracted Debian source package
     Deb(DebImportArgs),
 }
 
 #[derive(clap::Args)]
-pub struct AurImportArgs {
+pub struct ArchImportArgs {
     /// Path to the PKGBUILD to import
     pub pkgbuild: PathBuf,
 
