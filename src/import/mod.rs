@@ -233,10 +233,7 @@ fn parse_field_path(field_path: &str) -> Result<Vec<PathSegment<'_>>, ImportErro
 }
 
 fn set_prefix_preserving(decor: &mut toml_edit::Decor, comment: &str) {
-    let existing = decor
-        .prefix()
-        .and_then(|raw| raw.as_str())
-        .unwrap_or("");
+    let existing = decor.prefix().and_then(|raw| raw.as_str()).unwrap_or("");
     let combined = if existing.is_empty() {
         comment.to_string()
     } else {
@@ -457,7 +454,9 @@ mod tests {
         assert!(rendered.contains("# TODO: referenced evil.install"));
         assert!(rendered.contains("# TODO: [injected]"));
         assert!(rendered.contains("# TODO: owned = true\\u{0}"));
-        let scriptlets_header = rendered.find("[package.scriptlets]").expect("scriptlets table");
+        let scriptlets_header = rendered
+            .find("[package.scriptlets]")
+            .expect("scriptlets table");
         assert!(rendered[..scriptlets_header].contains("# TODO: referenced evil.install"));
         assert_eq!(parsed.package.name, "imported-package");
         assert!(!rendered.contains("\n[injected]\n"));

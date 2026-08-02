@@ -261,11 +261,7 @@ fn lint_unverified_sources(spec: &PkgSpecFile, findings: &mut Vec<LintFinding>) 
         if let SourceEntry::Remote { filename, .. } = source_spec::parse_source_entry(raw) {
             let checksum = match kind {
                 "source" => spec.package.sha256sums.get(index).map(String::as_str),
-                "patch" => spec
-                    .package
-                    .patch_sha256sums
-                    .get(index)
-                    .map(String::as_str),
+                "patch" => spec.package.patch_sha256sums.get(index).map(String::as_str),
                 _ => None,
             };
             if checksum.is_none() || checksum == Some("SKIP") {
@@ -473,17 +469,22 @@ fn lint_file_overlap(spec: &PkgSpecFile, findings: &mut Vec<LintFinding>) {
                 },
             )
         })
-        .chain(spec.subpackages.iter().enumerate().flat_map(|(index, sub)| {
-            sub.files.all_paths().map(move |path| {
-                (
-                    path.to_string(),
-                    FileOwner {
-                        label: format!("subpackage '{}'", sub.suffix),
-                        field_path: format!("subpackage[{index}].files"),
-                    },
-                )
-            })
-        }))
+        .chain(
+            spec.subpackages
+                .iter()
+                .enumerate()
+                .flat_map(|(index, sub)| {
+                    sub.files.all_paths().map(move |path| {
+                        (
+                            path.to_string(),
+                            FileOwner {
+                                label: format!("subpackage '{}'", sub.suffix),
+                                field_path: format!("subpackage[{index}].files"),
+                            },
+                        )
+                    })
+                }),
+        )
     {
         if let Some(previous) = seen.get(&path) {
             findings.push(LintFinding::error(

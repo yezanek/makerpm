@@ -252,25 +252,31 @@ pub fn import_debian_source(source_dir: &Path) -> Result<ImportDraft, DebImportE
         let binary_name = stanza
             .get("Package")
             .expect("control parser only returns binary Package stanzas");
-        let suffix = derive_suffix(source_name, binary_name);
+        let derived_suffix = derive_suffix(source_name, binary_name);
+        let mut suffix = derived_suffix.clone();
         if !used_suffixes.insert(suffix.clone()) {
+            let mut discriminator = 2;
+            while !used_suffixes.insert(format!("{derived_suffix}-{discriminator}")) {
+                discriminator += 1;
+            }
+            suffix = format!("{derived_suffix}-{discriminator}");
             note(
                 &mut notes,
                 &format!("subpackage[{index}].suffix"),
                 format!(
-                    "derived suffix {suffix:?} for Debian package {binary_name} collides with an earlier subpackage; skipped duplicate subpackage"
+                    "derived suffix {derived_suffix:?} for Debian package {binary_name} collides with an earlier subpackage; changed it to {suffix:?}"
                 ),
                 Confidence::Unsupported,
             );
-            continue;
+        } else {
+            note(
+                &mut notes,
+                &format!("subpackage[{index}].suffix"),
+                suffix_note(binary_name, &suffix),
+                Confidence::BestEffort,
+            );
         }
         let (sub_summary, sub_description) = control::description(stanza);
-        note(
-            &mut notes,
-            &format!("subpackage[{index}].suffix"),
-            suffix_note(binary_name, &suffix),
-            Confidence::BestEffort,
-        );
         confident(
             &mut notes,
             &format!("subpackage[{index}].summary"),
@@ -715,6 +721,28 @@ sample (1.5-1) stable; urgency=low
 
         let rendered = render_import_draft(&draft).unwrap();
         parse_rpmspec(&rendered).expect("rendered changelog draft should parse cleanly");
+    }
+
+    #[test]
+    fn disambiguates_colliding_subpackage_suffixes() {
+        let directory = debian_source_fixture();
+        let control_path = directory.path().join("debian/control");
+        let mut control = std::fs::read_to_string(&control_path).unwrap();
+        control.push_str(
+            "\nPackage: dev\nArchitecture: any\nDescription: Alternate development files\n Additional development files.\n",
+        );
+        std::fs::write(control_path, control).unwrap();
+
+        let draft = import_debian_source(directory.path()).unwrap();
+        assert_eq!(draft.spec.subpackages.len(), 2);
+        assert_eq!(draft.spec.subpackages[0].suffix, "dev");
+        assert_eq!(draft.spec.subpackages[1].suffix, "dev-2");
+        assert!(draft.notes.iter().any(|note| {
+            note.field_path == "subpackage[1].suffix" && note.confidence == Confidence::Unsupported
+        }));
+
+        let rendered = render_import_draft(&draft).unwrap();
+        parse_rpmspec(&rendered).expect("rendered collision draft should parse cleanly");
     }
 
     #[test]

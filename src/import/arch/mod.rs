@@ -266,9 +266,26 @@ pub fn draft_from_parsed(parsed: &ParsedPkgbuild) -> Result<ImportDraft, ArchImp
     }
 
     let consumed_fields = [
-        "pkgname", "pkgver", "pkgrel", "pkgdesc", "arch", "url", "license", "depends",
-        "depends_x86_64", "makedepends", "makedepends_x86_64", "optdepends", "provides",
-        "conflicts", "replaces", "source", "sha256sums", "b2sums", "md5sums", "install",
+        "pkgname",
+        "pkgver",
+        "pkgrel",
+        "pkgdesc",
+        "arch",
+        "url",
+        "license",
+        "depends",
+        "depends_x86_64",
+        "makedepends",
+        "makedepends_x86_64",
+        "optdepends",
+        "provides",
+        "conflicts",
+        "replaces",
+        "source",
+        "sha256sums",
+        "b2sums",
+        "md5sums",
+        "install",
     ];
     let unrecognized = parsed
         .assignments
