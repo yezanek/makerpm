@@ -45,6 +45,7 @@ pub fn validate(spec: &PkgSpecFile, toml_dir: &Path) -> ValidationResult {
     validate_version(&spec.package.version, &mut diagnostics);
     validate_license(&spec.package.license, &mut diagnostics);
     validate_sources(spec, toml_dir, &mut diagnostics);
+    validate_source_filenames(spec, &mut diagnostics);
     validate_sha256_lengths(spec, &mut diagnostics);
     let has_unverified = validate_unverified_sources(spec, &mut diagnostics);
     validate_subpackages(spec, &mut diagnostics);
@@ -86,19 +87,12 @@ fn validate_sources(spec: &PkgSpecFile, toml_dir: &Path, diags: &mut Vec<Report>
         .sources
         .iter()
         .map(|s| (s.as_str(), "source"))
-        .chain(
-            spec.package
-                .patches
-                .iter()
-                .map(|s| (s.as_str(), "patch")),
-        );
+        .chain(spec.package.patches.iter().map(|s| (s.as_str(), "patch")));
 
     for (raw, kind) in all_sources {
         if let SourceEntry::Local { filename } = source_spec::parse_source_entry(raw) {
             if filename.is_empty() {
-                diags.push(error(format!(
-                    "local {kind} has an empty filename"
-                )));
+                diags.push(error(format!("local {kind} has an empty filename")));
                 continue;
             }
             let path = toml_dir.join(&filename);
@@ -124,9 +118,9 @@ fn validate_sha256_lengths(spec: &PkgSpecFile, diags: &mut Vec<Report>) {
         let s_len = spec.package.sha256sums.len();
         let src_len = spec.package.sources.len();
         if s_len != src_len {
+            let detail = length_mismatch_detail("sha256sums", s_len, "source", src_len);
             diags.push(error(format!(
-                "sha256sums has {s_len} entries but sources has {src_len} entries; \
-                 each source must have a corresponding sha256sums entry"
+                "sha256sums has {s_len} entries but sources has {src_len} entries; {detail}"
             )));
         }
     }
@@ -134,9 +128,69 @@ fn validate_sha256_lengths(spec: &PkgSpecFile, diags: &mut Vec<Report>) {
         let p_len = spec.package.patch_sha256sums.len();
         let patch_len = spec.package.patches.len();
         if p_len != patch_len {
+            let detail = length_mismatch_detail("patch_sha256sums", p_len, "patch", patch_len);
             diags.push(error(format!(
-                "patch_sha256sums has {p_len} entries but patches has {patch_len} entries; \
-                 each patch must have a corresponding patch_sha256sums entry"
+                "patch_sha256sums has {p_len} entries but patches has {patch_len} entries; {detail}"
+            )));
+        }
+    }
+}
+
+fn length_mismatch_detail(
+    sums: &str,
+    sums_len: usize,
+    entries: &str,
+    entries_len: usize,
+) -> String {
+    if sums_len > entries_len {
+        format!(
+            "entry {} of {sums} has no matching {entries}",
+            entries_len + 1
+        )
+    } else {
+        format!(
+            "entry {} of {entries}s has no matching {sums} entry",
+            sums_len + 1
+        )
+    }
+}
+
+fn validate_source_filenames(spec: &PkgSpecFile, diags: &mut Vec<Report>) {
+    let mut seen = std::collections::HashMap::<String, String>::new();
+    for (kind, index, raw) in spec
+        .package
+        .sources
+        .iter()
+        .enumerate()
+        .map(|(i, raw)| ("source", i, raw))
+        .chain(
+            spec.package
+                .patches
+                .iter()
+                .enumerate()
+                .map(|(i, raw)| ("patch", i, raw)),
+        )
+    {
+        let filename = match source_spec::parse_source_entry(raw) {
+            SourceEntry::Local { filename } | SourceEntry::Remote { filename, .. } => filename,
+        };
+        let path = Path::new(&filename);
+        let is_single_exact_component = matches!(
+            path.components().next(),
+            Some(std::path::Component::Normal(component))
+                if path.components().count() == 1 && component == path.as_os_str()
+        );
+        if filename.is_empty() || !is_single_exact_component {
+            diags.push(error(format!(
+                "{kind} entry {} resolves to an unsafe filename: {filename:?}; filenames must be a single path component",
+                index + 1
+            )));
+            continue;
+        }
+        let owner = format!("{kind} entry {}", index + 1);
+        if let Some(previous) = seen.insert(filename.clone(), owner.clone()) {
+            diags.push(error(format!(
+                "resolved filename {filename:?} is used by both {previous} and {owner}; use the filename::URL form to make names unique"
             )));
         }
     }
@@ -265,15 +319,11 @@ fn validate_file_overlap(spec: &PkgSpecFile, diags: &mut Vec<Report>) {
         .files
         .all_paths()
         .map(|p| (p.to_string(), "package".to_string()))
-        .chain(
-            spec.subpackages
-                .iter()
-                .flat_map(|sub| {
-                    sub.files
-                        .all_paths()
-                        .map(move |p| (p.to_string(), format!("subpackage '{}'", sub.suffix)))
-                }),
-        )
+        .chain(spec.subpackages.iter().flat_map(|sub| {
+            sub.files
+                .all_paths()
+                .map(move |p| (p.to_string(), format!("subpackage '{}'", sub.suffix)))
+        }))
     {
         if let Some(prev_owner) = seen.get(&path) {
             diags.push(error(format!(

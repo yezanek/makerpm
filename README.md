@@ -12,6 +12,7 @@ invokes `rpmbuild` to produce the final `.rpm` files — all in one command.
 - **rpm-build** — required at build time by `rpmbuild`, which `makerpm`
   shells out to. On Fedora/RHEL: `sudo dnf install rpm-build`. On
   openSUSE: `sudo zypper install rpm-build`.
+- **curl** — required only when downloading an `ftp://` source.
 
 ## Building
 
@@ -41,12 +42,15 @@ makerpm build
 ## CLI usage
 
 ```
+makerpm [-v|-vv|--verbose] <COMMAND>
 makerpm build [--spec-file PKGSPEC.toml] [--output-dir DIR] [FLAGS]
 makerpm spec  [--spec-file PKGSPEC.toml] [--output FILE]
 makerpm fetch [--spec-file PKGSPEC.toml] [FLAGS]
 makerpm validate [--spec-file PKGSPEC.toml]
 makerpm init [--name NAME]
 ```
+
+`-v`, `-vv`, and `--verbose` are global options and work with every subcommand.
 
 `--spec-file` defaults to `./PKGSPEC.toml` in the current directory.
 
@@ -68,6 +72,10 @@ makerpm init [--name NAME]
 | `--refetch` | Ignore cache and re-download every remote source |
 | `--skip-checksums` | Proceed on checksum mismatch with a warning |
 | `--allow-unverified` | Proceed past unverified-source warnings (useful for CI) |
+
+FTP transfers have no total-duration limit by default. Set
+`MAKERPM_CURL_TIMEOUT` to a positive number of seconds to enforce one;
+connection attempts always time out after 30 seconds.
 
 ## PKGSPEC.toml format
 

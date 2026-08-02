@@ -12,10 +12,17 @@ pub enum MakerpmError {
         source: std::io::Error,
     },
 
+    #[error("I/O error while {operation}")]
+    OperationIo {
+        operation: &'static str,
+        #[source]
+        source: std::io::Error,
+    },
+
     #[error("validation failed with {count} error(s)")]
     Validation { count: usize },
 
-    #[error("failed to download {url}")]
+    #[error("failed to download {url}: {source}")]
     Fetch {
         url: String,
         #[source]
@@ -43,8 +50,5 @@ pub enum MakerpmError {
 
     #[error("rpmbuild failed with exit code {exit_code}")]
     #[diagnostic(severity(Error))]
-    RpmbuildFailed {
-        exit_code: i32,
-        stderr_tail: String,
-    },
+    RpmbuildFailed { exit_code: i32, stderr_tail: String },
 }

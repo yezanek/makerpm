@@ -170,7 +170,10 @@ mod tests {
 
     #[test]
     fn extra_build_args_cmake() {
-        let args = vec!["-DCMAKE_BUILD_TYPE=Release".into(), "-DBUILD_TESTING=OFF".into()];
+        let args = vec![
+            "-DCMAKE_BUILD_TYPE=Release".into(),
+            "-DBUILD_TESTING=OFF".into(),
+        ];
         assert_eq!(
             BuildSystem::Cmake.extra_build_args_string(&args),
             "-DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF"
@@ -193,7 +196,10 @@ mod tests {
 
     #[test]
     fn cmake_required_build_requires() {
-        assert_eq!(BuildSystem::Cmake.required_build_requires(), &["cmake", "gcc-c++"]);
+        assert_eq!(
+            BuildSystem::Cmake.required_build_requires(),
+            &["cmake", "gcc-c++"]
+        );
     }
 
     #[test]

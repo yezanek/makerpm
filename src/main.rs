@@ -41,6 +41,8 @@ fn load_and_validate(spec_file: &std::path::Path) -> EarlyReturn {
 
 fn main() -> ExitCode {
     let cli = makerpm::cli::Cli::parse();
+    let verbosity = cli.verbose;
+    init_logging(verbosity);
 
     match cli.command {
         makerpm::cli::Commands::Validate(args) => {
@@ -80,6 +82,8 @@ fn main() -> ExitCode {
                 return ExitCode::from(1);
             }
 
+            log_injected_dependencies(verbosity, &result.injected_build_deps);
+
             let rendered = match makerpm::spec_gen::render(&spec, &result.injected_build_deps) {
                 Ok(s) => s,
                 Err(e) => {
@@ -117,11 +121,11 @@ fn main() -> ExitCode {
                 return ExitCode::from(1);
             }
 
-            if result.has_unverified_sources && !args.fetch_flags.allow_unverified {
-                eprintln!(
-                    "Error: remote sources without checksums detected. \
-                     Use --allow-unverified to proceed."
-                );
+            log_injected_dependencies(verbosity, &result.injected_build_deps);
+            if !may_use_unverified_sources(
+                result.has_unverified_sources,
+                args.fetch_flags.allow_unverified,
+            ) {
                 return ExitCode::from(1);
             }
 
@@ -130,10 +134,9 @@ fn main() -> ExitCode {
                 offline: args.fetch_flags.offline,
                 refetch: args.fetch_flags.refetch,
                 skip_checksums: args.fetch_flags.skip_checksums,
-                allow_unverified: args.fetch_flags.allow_unverified,
             };
 
-            let downloader = makerpm::fetch::UreqDownloader;
+            let downloader = makerpm::fetch::UreqDownloader::default();
 
             match makerpm::fetch::fetch_sources(&spec, &toml_dir, &opts, &downloader) {
                 Ok(resolved) => {
@@ -168,11 +171,11 @@ fn main() -> ExitCode {
                 return ExitCode::from(1);
             }
 
-            if result.has_unverified_sources && !args.fetch_flags.allow_unverified {
-                eprintln!(
-                    "Error: remote sources without checksums detected. \
-                     Use --allow-unverified to proceed."
-                );
+            log_injected_dependencies(verbosity, &result.injected_build_deps);
+            if !may_use_unverified_sources(
+                result.has_unverified_sources,
+                args.fetch_flags.allow_unverified,
+            ) {
                 return ExitCode::from(1);
             }
 
@@ -189,23 +192,18 @@ fn main() -> ExitCode {
                 offline: args.fetch_flags.offline,
                 refetch: args.fetch_flags.refetch,
                 skip_checksums: args.fetch_flags.skip_checksums,
-                allow_unverified: args.fetch_flags.allow_unverified,
             };
 
-            let downloader = makerpm::fetch::UreqDownloader;
+            let downloader = makerpm::fetch::UreqDownloader::default();
 
-            let resolved = match makerpm::fetch::fetch_sources(
-                &spec,
-                &toml_dir,
-                &fetch_opts,
-                &downloader,
-            ) {
-                Ok(r) => r,
-                Err(e) => {
-                    eprintln!("Error fetching sources: {e}");
-                    return ExitCode::from(1);
-                }
-            };
+            let resolved =
+                match makerpm::fetch::fetch_sources(&spec, &toml_dir, &fetch_opts, &downloader) {
+                    Ok(r) => r,
+                    Err(e) => {
+                        eprintln!("Error fetching sources: {e}");
+                        return ExitCode::from(1);
+                    }
+                };
 
             let downloaded = resolved.iter().filter(|r| r.was_download).count();
             let cached = resolved.iter().filter(|r| !r.was_download).count();
@@ -216,26 +214,22 @@ fn main() -> ExitCode {
                 cached
             );
 
-            let topdir = match makerpm::build_tree::setup_build_tree(
-                &spec,
-                &toml_dir,
-                &resolved,
-                &rendered,
-            ) {
-                Ok(t) => t,
-                Err(e) => {
-                    eprintln!("Error setting up build tree: {e}");
-                    return ExitCode::from(1);
-                }
-            };
+            let topdir =
+                match makerpm::build_tree::setup_build_tree(&spec, &toml_dir, &resolved, &rendered)
+                {
+                    Ok(t) => t,
+                    Err(e) => {
+                        eprintln!("Error setting up build tree: {e}");
+                        return ExitCode::from(1);
+                    }
+                };
 
             eprintln!("building RPMs...");
 
             if let Err(e) = makerpm::runner::run_rpmbuild(&topdir, &spec.package.name) {
                 eprintln!("Error: {e}");
                 if let makerpm::error::MakerpmError::RpmbuildFailed {
-                    ref stderr_tail,
-                    ..
+                    ref stderr_tail, ..
                 } = e
                 {
                     if !stderr_tail.is_empty() {
@@ -294,7 +288,10 @@ fn main() -> ExitCode {
                 }
             };
 
-            if name.chars().any(|c| c == '"' || c == '\\' || c.is_control()) {
+            if name
+                .chars()
+                .any(|c| c == '"' || c == '\\' || c.is_control())
+            {
                 eprintln!(
                     "Error: package name {name:?} contains characters that are not valid in a TOML string"
                 );
@@ -353,5 +350,62 @@ entries = ["Initial package"]
 fn today_utc() -> String {
     let now = time::OffsetDateTime::now_utc();
     let format = time::macros::format_description!("[year]-[month]-[day]");
-    now.format(format).unwrap()
+    now.format(format)
+        .expect("the static ISO date format is always valid")
+}
+
+fn log_injected_dependencies(verbosity: u8, dependencies: &[String]) {
+    if verbosity > 0 {
+        for dependency in dependencies {
+            tracing::info!(
+                dependency = %dependency,
+                "adding build requirement for the selected build system"
+            );
+        }
+    }
+}
+
+fn init_logging(verbosity: u8) {
+    let level = match verbosity {
+        0 => tracing::Level::WARN,
+        1 => tracing::Level::INFO,
+        _ => tracing::Level::DEBUG,
+    };
+    tracing_subscriber::fmt()
+        .with_max_level(level)
+        .with_target(false)
+        .without_time()
+        .with_writer(std::io::stderr)
+        .init();
+}
+
+fn may_use_unverified_sources(has_unverified: bool, explicitly_allowed: bool) -> bool {
+    use std::io::{IsTerminal, Write};
+
+    if !has_unverified || explicitly_allowed {
+        return true;
+    }
+    if !std::io::stdin().is_terminal() {
+        eprintln!(
+            "Error: remote sources without checksums detected. Use --allow-unverified to proceed in non-interactive mode."
+        );
+        return false;
+    }
+
+    eprint!("Continue with the unverified remote sources? [y/N] ");
+    if std::io::stderr().flush().is_err() {
+        return false;
+    }
+    let mut answer = String::new();
+    match std::io::stdin().read_line(&mut answer) {
+        Ok(_) if matches!(answer.trim().to_ascii_lowercase().as_str(), "y" | "yes") => true,
+        Ok(_) => {
+            eprintln!("cancelled");
+            false
+        }
+        Err(error) => {
+            eprintln!("Error: failed to read confirmation: {error}");
+            false
+        }
+    }
 }

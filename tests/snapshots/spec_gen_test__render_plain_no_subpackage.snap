@@ -1,10 +1,8 @@
 ---
 source: tests/spec_gen_test.rs
-assertion_line: 19
 expression: rendered
 ---
 
-%global debug_package %{nil}
 Name:           hello-world
 Version:        1.0
 Release:        1%{?dist}
@@ -18,7 +16,7 @@ hello-world prints a friendly greeting to standard output.
 
 %prep
 
-%setup -q
+%autosetup -p1
 
 
 
@@ -43,7 +41,6 @@ hello-world prints a friendly greeting to standard output.
 
 %changelog
 
-* Mon Jun 29 2026 Jane Doe <jane@example.org>
-- 1.0-1
+* Mon Jun 29 2026 Jane Doe <jane@example.org> - 1.0-1
 
 - Initial package

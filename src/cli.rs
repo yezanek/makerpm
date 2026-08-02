@@ -5,6 +5,10 @@ use clap::{Parser, Subcommand};
 #[derive(Parser)]
 #[command(name = "makerpm", version, about = "A modern RPM builder")]
 pub struct Cli {
+    /// Increase diagnostic verbosity (-v for info, -vv for debug)
+    #[arg(short, long, action = clap::ArgAction::Count, global = true)]
+    pub verbose: u8,
+
     #[command(subcommand)]
     pub command: Commands,
 }
