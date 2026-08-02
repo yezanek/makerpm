@@ -92,7 +92,6 @@ pub struct ImportArgs {
 #[derive(Subcommand)]
 pub enum ImportCommands {
     /// Import an Arch Linux PKGBUILD without executing it
-    #[command(alias = "aur")]
     Arch(ArchImportArgs),
     /// Import an extracted Debian source package
     Deb(DebImportArgs),

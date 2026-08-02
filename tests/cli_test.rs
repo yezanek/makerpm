@@ -213,13 +213,18 @@ package() { install -Dm755 app "$pkgdir/usr/bin/app"; }
 }
 
 #[test]
-fn import_arch_hides_aur_compatibility_alias() {
+fn import_arch_is_the_only_pkgbuild_import_command() {
     makerpm()
         .args(["import", "--help"])
         .assert()
         .success()
         .stdout(predicate::str::contains("arch"))
         .stdout(predicate::str::contains("aur").not());
+
+    makerpm()
+        .args(["import", "aur", "--help"])
+        .assert()
+        .failure();
 }
 
 fn write_debian_fixture(root: &std::path::Path) {
