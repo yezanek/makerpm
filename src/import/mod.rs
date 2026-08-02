@@ -280,7 +280,7 @@ mod tests {
         BuildSpec, BuildSteps, BuildSystem, ChangelogEntry, DependencySet, FilesSpec, Package,
         Scriptlets, Subpackage,
     };
-    use crate::parse::parse_pkgspec;
+    use crate::parse::parse_rpmspec;
 
     fn hand_built_draft() -> ImportDraft {
         ImportDraft {
@@ -359,7 +359,7 @@ mod tests {
     fn writer_round_trips_and_annotates_only_non_confident_fields() {
         let rendered = render_import_draft(&hand_built_draft()).unwrap();
 
-        let parsed = parse_pkgspec(&rendered).expect("written draft should parse as a PKGSPEC");
+        let parsed = parse_rpmspec(&rendered).expect("written draft should parse as an RPMSPEC");
         assert_eq!(parsed.package.name, "imported-package");
         assert_eq!(parsed.package.build.system, BuildSystem::Cmake);
         assert_eq!(parsed.subpackages[0].suffix, "devel");
@@ -384,7 +384,7 @@ mod tests {
 
         write_import_draft(&hand_built_draft(), &output, true).unwrap();
         let rendered = std::fs::read_to_string(&output).unwrap();
-        parse_pkgspec(&rendered).expect("forced output should contain the replacement draft");
+        parse_rpmspec(&rendered).expect("forced output should contain the replacement draft");
     }
 
     #[test]
@@ -435,7 +435,7 @@ mod tests {
         });
 
         let rendered = render_import_draft(&draft).unwrap();
-        let parsed = parse_pkgspec(&rendered).expect("decorated output must remain valid TOML");
+        let parsed = parse_rpmspec(&rendered).expect("decorated output must remain valid TOML");
 
         assert!(rendered.contains(
             "# TODO: referenced evil.install\n# TODO: [injected]\n# TODO: owned = true\\u{0}\n[package.scriptlets]"
@@ -451,7 +451,7 @@ mod tests {
         draft.spec.package.description = "''' \"\"\" # [table] \\".to_string();
 
         let rendered = render_import_draft(&draft).unwrap();
-        let parsed = parse_pkgspec(&rendered).expect("serialized values must not escape strings");
+        let parsed = parse_rpmspec(&rendered).expect("serialized values must not escape strings");
 
         assert_eq!(parsed.package.name, draft.spec.package.name);
         assert_eq!(parsed.package.description, draft.spec.package.description);

@@ -15,11 +15,11 @@ fn lint_clean_fixture_exits_zero() {
 }
 
 #[test]
-fn lint_defaults_to_pkgspec_in_current_directory() {
+fn lint_defaults_to_rpmspec_in_current_directory() {
     let directory = tempfile::tempdir().unwrap();
     std::fs::copy(
         "tests/fixtures/valid_minimal.toml",
-        directory.path().join("PKGSPEC.toml"),
+        directory.path().join("RPMSPEC.toml"),
     )
     .unwrap();
 
@@ -150,7 +150,7 @@ fn fetch_with_allow_unverified_passes_validation_gate() {
 #[test]
 fn verbose_spec_reports_injected_build_dependencies() {
     let directory = tempfile::tempdir().unwrap();
-    let spec_path = directory.path().join("PKGSPEC.toml");
+    let spec_path = directory.path().join("RPMSPEC.toml");
     std::fs::write(
         &spec_path,
         r#"

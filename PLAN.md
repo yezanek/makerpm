@@ -58,11 +58,14 @@ makerpm import aur ./PKGBUILD -o package.toml
 
 ## 2. CLI restructure (breaking change from v1)
 
-v1 used `--spec-file PKGSPEC.toml` (defaulting to `./PKGSPEC.toml`) on every
-subcommand. v2 switches to a positional path argument to match the shape
-requested for v2 and to read more naturally as a verb-object command, the
-way `makepkg`/`dpkg-buildpackage`-adjacent tools typically don't need a
-flag for the one file they obviously operate on.
+v1 used the filename `PKGSPEC.toml`, passed through `--spec-file` and
+defaulting to `./PKGSPEC.toml` on every subcommand. v2 renames the canonical
+project file to `RPMSPEC.toml` so its purpose is immediately recognizable as
+RPM-specific; the TOML schema itself is unchanged by this naming transition.
+At the same time, v2 switches to a positional path argument to match the shape
+requested for v2 and to read more naturally as a verb-object command, the way
+`makepkg`/`dpkg-buildpackage`-adjacent tools typically don't need a flag for
+the one file they obviously operate on.
 
 ```
 makerpm build <PATH> [--output-dir DIR] [--offline] [--refetch]
@@ -75,12 +78,13 @@ makerpm import deb <SOURCE_DIR> -o <PATH> [--force]
 makerpm import aur <PKGBUILD_PATH> -o <PATH> [--force]
 ```
 
-- `<PATH>` defaults to `./PKGSPEC.toml` when omitted, same default as v1.
+- `<PATH>` defaults to `./RPMSPEC.toml` when omitted; only the canonical
+  filename changes from v1's `./PKGSPEC.toml`.
 - `validate` is renamed to `lint`; keep `validate` as a hidden alias for one
   release (`#[command(alias = "validate")]` in `clap`) so v1 muscle memory
   and any scripts aren't broken outright.
 - `import`'s `-o <PATH>` is required (no sensible default — importers
-  should never silently overwrite `./PKGSPEC.toml`); `--force` is required
+  should never silently overwrite `./RPMSPEC.toml`); `--force` is required
   to overwrite an existing file at `-o`'s path, otherwise error out.
 - This is the first task of Phase 5 (§7) since every other v2 piece hangs
   off subcommand structure.
@@ -519,7 +523,7 @@ new warning rules). No importer code yet.
 **Prompt:**
 > Implement Phase 5 of the makerpm v2 plan: restructure the CLI (§2) so
 > `build`, `lint`, `fetch`, and `spec` take a positional `<PATH>` argument
-> defaulting to `./PKGSPEC.toml`, and rename `validate` to `lint` while
+> defaulting to `./RPMSPEC.toml`, and rename `validate` to `lint` while
 > keeping `validate` as a hidden `clap` alias. Rework the old `validate.rs`
 > into `lint.rs`: introduce `Severity`/`LintFinding` types (§3), migrate
 > every v1 validation rule to `Severity::Error` unchanged in behavior, and

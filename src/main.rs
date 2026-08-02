@@ -20,7 +20,7 @@ fn load_and_lint(spec_file: &std::path::Path) -> EarlyReturn {
         }
     };
 
-    let spec = match makerpm::parse::parse_pkgspec(&toml_str) {
+    let spec = match makerpm::parse::parse_rpmspec(&toml_str) {
         Ok(s) => s,
         Err(e) => {
             let report = miette::Report::new(e);
@@ -316,7 +316,7 @@ entries = ["Initial package"]
                 date = today_utc(),
             );
 
-            let path = std::path::PathBuf::from("PKGSPEC.toml");
+            let path = std::path::PathBuf::from("RPMSPEC.toml");
             match std::fs::OpenOptions::new()
                 .write(true)
                 .create_new(true)

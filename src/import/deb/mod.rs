@@ -524,7 +524,7 @@ mod tests {
     use super::*;
     use crate::import::render_import_draft;
     use crate::lint::lint;
-    use crate::parse::parse_pkgspec;
+    use crate::parse::parse_rpmspec;
 
     const CONTROL: &str = r#"Source: sample
 Maintainer: Jane Doe <jane@example.org>
@@ -648,7 +648,7 @@ sample (1.5-1) stable; urgency=low
         assert_eq!(dependency_note_count, dependency_count);
 
         let rendered = render_import_draft(&draft).unwrap();
-        let reparsed = parse_pkgspec(&rendered).expect("imported TOML should parse cleanly");
+        let reparsed = parse_rpmspec(&rendered).expect("imported TOML should parse cleanly");
         assert_eq!(reparsed.package.name, "sample");
         let lint_result = lint(&reparsed, directory.path(), &rendered);
         assert!(

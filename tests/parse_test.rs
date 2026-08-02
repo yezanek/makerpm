@@ -1,9 +1,9 @@
-use makerpm::parse::parse_pkgspec;
+use makerpm::parse::parse_rpmspec;
 
 #[test]
 fn valid_toml_parses() {
     let toml_str = include_str!("fixtures/valid_minimal.toml");
-    let spec = parse_pkgspec(toml_str).expect("should parse");
+    let spec = parse_rpmspec(toml_str).expect("should parse");
     assert_eq!(spec.package.name, "hello-world");
     assert_eq!(spec.package.version, "1.0");
     assert_eq!(spec.package.license, "MIT");
@@ -16,11 +16,11 @@ fn malformed_toml_returns_error() {
 name = "broken"
 version = 
 "#;
-    let result = parse_pkgspec(toml_str);
+    let result = parse_rpmspec(toml_str);
     assert!(result.is_err());
     let err = result.unwrap_err();
     let msg = format!("{err}");
-    assert!(msg.contains("failed to parse PKGSPEC.toml"));
+    assert!(msg.contains("failed to parse RPMSPEC.toml"));
 }
 
 #[test]
@@ -32,13 +32,13 @@ summary = "Missing version"
 license = "MIT"
 description = "No version field."
 "#;
-    let result = parse_pkgspec(toml_str);
+    let result = parse_rpmspec(toml_str);
     assert!(result.is_err());
 }
 
 #[test]
 fn empty_toml_returns_error() {
-    let result = parse_pkgspec("");
+    let result = parse_rpmspec("");
     assert!(result.is_err());
 }
 
@@ -64,7 +64,7 @@ summary = "Doc"
 description = "Documentation."
 files.docs = ["%{_docdir}/foo"]
 "#;
-    let spec = parse_pkgspec(toml_str).unwrap();
+    let spec = parse_rpmspec(toml_str).unwrap();
     assert_eq!(spec.subpackages.len(), 2);
     assert_eq!(spec.subpackages[0].suffix, "devel");
     assert_eq!(spec.subpackages[1].suffix, "doc");

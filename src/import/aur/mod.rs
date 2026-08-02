@@ -534,7 +534,7 @@ fn note(
 mod tests {
     use super::*;
     use crate::import::render_import_draft;
-    use crate::parse::parse_pkgspec;
+    use crate::parse::parse_rpmspec;
 
     const PKGBUILD: &str = r#"
 pkgname=hello-aur
@@ -591,7 +591,7 @@ check() {
         assert_eq!(draft.spec.package.files.paths, [FILES_PLACEHOLDER]);
 
         let rendered = render_import_draft(&draft).unwrap();
-        let parsed = parse_pkgspec(&rendered).unwrap();
+        let parsed = parse_rpmspec(&rendered).unwrap();
         let lint = crate::lint::lint(&parsed, Path::new("."), &rendered);
         assert!(!lint.has_errors(), "{:?}", lint.findings);
         assert!(rendered.contains("# TODO: file list not imported"));
