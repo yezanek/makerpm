@@ -18,7 +18,7 @@ const FILES_NOTE: &str = "file list not imported — PKGBUILD package() function
 const PKGBUILD_LIMIT: u64 = 16 * 1024 * 1024;
 
 #[derive(Debug, Error)]
-pub enum AurImportError {
+pub enum ArchImportError {
     #[error("not a PKGBUILD: missing file {0}")]
     Missing(PathBuf),
 
@@ -39,40 +39,40 @@ pub enum AurImportError {
     MissingField(&'static str),
 }
 
-pub fn import_pkgbuild(path: &Path) -> Result<ImportDraft, AurImportError> {
+pub fn import_pkgbuild(path: &Path) -> Result<ImportDraft, ArchImportError> {
     if !path.is_file() {
-        return Err(AurImportError::Missing(path.to_path_buf()));
+        return Err(ArchImportError::Missing(path.to_path_buf()));
     }
     let input = read_pkgbuild(path, PKGBUILD_LIMIT)?;
     let parsed = pkgbuild_parser::parse(&input)?;
     draft_from_parsed(&parsed)
 }
 
-fn read_pkgbuild(path: &Path, limit: u64) -> Result<String, AurImportError> {
-    let file = std::fs::File::open(path).map_err(|source| AurImportError::Read {
+fn read_pkgbuild(path: &Path, limit: u64) -> Result<String, ArchImportError> {
+    let file = std::fs::File::open(path).map_err(|source| ArchImportError::Read {
         path: path.to_path_buf(),
         source,
     })?;
     let mut bytes = Vec::new();
     file.take(limit + 1)
         .read_to_end(&mut bytes)
-        .map_err(|source| AurImportError::Read {
+        .map_err(|source| ArchImportError::Read {
             path: path.to_path_buf(),
             source,
         })?;
     if bytes.len() as u64 > limit {
-        return Err(AurImportError::InputTooLarge {
+        return Err(ArchImportError::InputTooLarge {
             path: path.to_path_buf(),
             limit,
         });
     }
-    String::from_utf8(bytes).map_err(|source| AurImportError::Read {
+    String::from_utf8(bytes).map_err(|source| ArchImportError::Read {
         path: path.to_path_buf(),
         source: std::io::Error::new(std::io::ErrorKind::InvalidData, source),
     })
 }
 
-pub fn draft_from_parsed(parsed: &ParsedPkgbuild) -> Result<ImportDraft, AurImportError> {
+pub fn draft_from_parsed(parsed: &ParsedPkgbuild) -> Result<ImportDraft, ArchImportError> {
     let mut notes = Vec::new();
 
     let pkgname = required(parsed, "pkgname")?;
@@ -288,12 +288,12 @@ pub fn draft_from_parsed(parsed: &ParsedPkgbuild) -> Result<ImportDraft, AurImpo
 fn required<'a>(
     parsed: &'a ParsedPkgbuild,
     field: &'static str,
-) -> Result<&'a AssignmentValue, AurImportError> {
+) -> Result<&'a AssignmentValue, ArchImportError> {
     parsed
         .assignments
         .get(field)
         .filter(|value| !value.values().is_empty())
-        .ok_or(AurImportError::MissingField(field))
+        .ok_or(ArchImportError::MissingField(field))
 }
 
 fn first(value: &AssignmentValue) -> &str {
@@ -537,7 +537,7 @@ mod tests {
     use crate::parse::parse_rpmspec;
 
     const PKGBUILD: &str = r#"
-pkgname=hello-aur
+pkgname=hello-arch
 pkgver=1.2.3
 pkgrel=4
 pkgdesc='A friendly example package with enough detail for RPM metadata'
@@ -623,7 +623,7 @@ check() {
     #[test]
     fn split_packages_install_scripts_and_absent_files_are_placeholders() {
         let input = PKGBUILD
-            .replace("pkgname=hello-aur", "pkgname=('hello-aur' 'hello-docs')")
+            .replace("pkgname=hello-arch", "pkgname=('hello-arch' 'hello-docs')")
             .replace("pkgrel=4", "pkgrel=4\ninstall=hello.install");
         let draft = draft(&input);
         assert!(draft.notes.iter().any(|note| {
@@ -669,7 +669,7 @@ check() {
 
         assert!(matches!(
             read_pkgbuild(&path, 4),
-            Err(AurImportError::InputTooLarge { limit: 4, .. })
+            Err(ArchImportError::InputTooLarge { limit: 4, .. })
         ));
     }
 }

@@ -339,8 +339,8 @@ entries = ["Initial package"]
         }
 
         makerpm::cli::Commands::Import(args) => match args.command {
-            makerpm::cli::ImportCommands::Aur(args) => {
-                let draft = match makerpm::import::aur::import_pkgbuild(&args.pkgbuild) {
+            makerpm::cli::ImportCommands::Arch(args) => {
+                let draft = match makerpm::import::arch::import_pkgbuild(&args.pkgbuild) {
                     Ok(draft) => draft,
                     Err(error) => {
                         eprintln!("Error: {error}");
@@ -358,7 +358,7 @@ entries = ["Initial package"]
                 match result {
                     Ok(_) => {
                         eprintln!(
-                            "Note: AUR file lists and .install scriptlets were not imported; populate them after a test build."
+                            "Note: Arch file lists and .install scriptlets were not imported; populate them after a test build."
                         );
                         ExitCode::SUCCESS
                     }

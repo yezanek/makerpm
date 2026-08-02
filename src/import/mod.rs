@@ -9,7 +9,7 @@ use toml_edit::{DocumentMut, Table};
 
 use crate::model::PkgSpecFile;
 
-pub mod aur;
+pub mod arch;
 pub mod deb;
 
 #[derive(Debug)]

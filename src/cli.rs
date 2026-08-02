@@ -92,13 +92,14 @@ pub struct ImportArgs {
 #[derive(Subcommand)]
 pub enum ImportCommands {
     /// Import an Arch Linux PKGBUILD without executing it
-    Aur(AurImportArgs),
+    #[command(alias = "aur")]
+    Arch(ArchImportArgs),
     /// Import an extracted Debian source package
     Deb(DebImportArgs),
 }
 
 #[derive(clap::Args)]
-pub struct AurImportArgs {
+pub struct ArchImportArgs {
     /// Path to the PKGBUILD to import
     pub pkgbuild: PathBuf,
 

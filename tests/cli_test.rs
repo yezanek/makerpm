@@ -177,16 +177,16 @@ system = "cmake"
 }
 
 #[test]
-fn import_aur_writes_annotated_draft_without_executing_pkgbuild() {
+fn import_arch_writes_annotated_draft_without_executing_pkgbuild() {
     let directory = tempfile::tempdir().unwrap();
     let pkgbuild = directory.path().join("PKGBUILD");
     let output = directory.path().join("package.toml");
     std::fs::write(
         &pkgbuild,
-        r#"pkgname=cli-aur-import
+        r#"pkgname=cli-arch-import
 pkgver=$(printf 'this must stay literal')
 pkgrel=1
-pkgdesc='CLI AUR import fixture with a sufficiently detailed summary'
+pkgdesc='CLI Arch import fixture with a sufficiently detailed summary'
 arch=('any')
 license=('MIT')
 source=('https://example.test/source.tar.gz')
@@ -197,7 +197,7 @@ package() { install -Dm755 app "$pkgdir/usr/bin/app"; }
     .unwrap();
 
     makerpm()
-        .args(["import", "aur"])
+        .args(["import", "arch"])
         .arg(&pkgbuild)
         .arg("-o")
         .arg(&output)
@@ -210,6 +210,16 @@ package() { install -Dm755 app "$pkgdir/usr/bin/app"; }
     assert!(written.contains("$(printf 'this must stay literal')"));
     assert!(written.contains("%{buildroot}/usr/bin/app"));
     assert!(written.contains("# TODO:"));
+}
+
+#[test]
+fn import_arch_hides_aur_compatibility_alias() {
+    makerpm()
+        .args(["import", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("arch"))
+        .stdout(predicate::str::contains("aur").not());
 }
 
 fn write_debian_fixture(root: &std::path::Path) {
