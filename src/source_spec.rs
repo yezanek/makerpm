@@ -12,7 +12,7 @@ pub fn parse_source_entry(raw: &str) -> SourceEntry {
         };
     }
     if let Ok(url) = url::Url::parse(raw) {
-        if matches!(url.scheme(), "http" | "https") {
+        if matches!(url.scheme(), "http" | "https" | "ftp") {
             let filename = url
                 .path_segments()
                 .and_then(|mut segs| segs.next_back())

@@ -99,3 +99,31 @@ fn fetch_with_allow_unverified_passes_validation_gate() {
         "should fail on download/uncached, not validation gate: {stderr}"
     );
 }
+
+#[test]
+fn verbose_spec_reports_injected_build_dependencies() {
+    let directory = tempfile::tempdir().unwrap();
+    let spec_path = directory.path().join("PKGSPEC.toml");
+    std::fs::write(
+        &spec_path,
+        r#"
+[package]
+name = "verbose-test"
+version = "1.0"
+summary = "Verbose test"
+license = "MIT"
+description = "Tests verbose dependency reporting."
+[package.build]
+system = "cmake"
+"#,
+    )
+    .unwrap();
+    makerpm()
+        .args(["-v", "spec", "--spec-file"])
+        .arg(spec_path)
+        .assert()
+        .success()
+        .stderr(predicates::str::contains(
+            "adding build requirement for the selected build system",
+        ));
+}

@@ -67,7 +67,7 @@ fn build_renderables<'a>(spec: &'a PkgSpecFile) -> Vec<RenderablePackage<'a>> {
             files: &sub.files,
             scriptlets: &sub.scriptlets,
             is_base: false,
-            noarch: sub.noarch.unwrap_or(false),
+            noarch: sub.noarch.unwrap_or(spec.package.noarch),
             license: sub.license.as_deref().or(Some(&spec.package.license)),
             url: sub.url.as_deref().or(spec.package.url.as_deref()),
         });
@@ -179,11 +179,7 @@ fn rpm_date_filter(
 pub fn render(spec: &PkgSpecFile, injected_build_deps: &[String]) -> Result<String, RenderError> {
     let renderables = build_renderables(spec);
 
-    let mut build_requires: Vec<String> = spec
-        .package
-        .deps
-        .build_depends
-        .to_vec();
+    let mut build_requires: Vec<String> = spec.package.deps.build_depends.to_vec();
     for sub in &spec.subpackages {
         for dep in &sub.deps.build_depends {
             if !build_requires.contains(dep) {
@@ -200,13 +196,7 @@ pub fn render(spec: &PkgSpecFile, injected_build_deps: &[String]) -> Result<Stri
     let build_section = render_build_section(spec);
     let install_section = render_install_section(spec);
     let include_check = should_include_check(spec);
-    let check_section = spec
-        .package
-        .build
-        .steps
-        .check
-        .clone()
-        .unwrap_or_default();
+    let check_section = spec.package.build.steps.check.clone().unwrap_or_default();
 
     let mut context = Context::new();
 

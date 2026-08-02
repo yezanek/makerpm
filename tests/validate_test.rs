@@ -42,10 +42,7 @@ fn version_hyphen_triggers_error() {
 fn license_unknown_triggers_warning() {
     let result = load_and_validate("err_license_unknown.toml");
     assert!(!result.has_errors());
-    assert!(has_warning_matching(
-        &result,
-        "not a valid SPDX expression"
-    ));
+    assert!(has_warning_matching(&result, "not a valid SPDX expression"));
 }
 
 #[test]
@@ -91,7 +88,10 @@ fn subpackage_empty_fields_triggers_error() {
 fn suffix_not_unique_triggers_error() {
     let result = load_and_validate("err_suffix_not_unique.toml");
     assert!(result.has_errors());
-    assert!(has_diagnostic_matching(&result, "duplicate subpackage suffix"));
+    assert!(has_diagnostic_matching(
+        &result,
+        "duplicate subpackage suffix"
+    ));
 }
 
 #[test]
@@ -147,9 +147,7 @@ system = "cmake"
     let spec = parse_pkgspec(toml_str).unwrap();
     let result = validate(&spec, Path::new("."));
     assert!(result.injected_build_deps.contains(&"cmake".to_string()));
-    assert!(result
-        .injected_build_deps
-        .contains(&"gcc-c++".to_string()));
+    assert!(result.injected_build_deps.contains(&"gcc-c++".to_string()));
 }
 
 #[test]
@@ -231,4 +229,40 @@ sha256sums = ["9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a00"
     let spec = parse_pkgspec(toml_str).unwrap();
     let result = validate(&spec, Path::new("."));
     assert!(!result.has_unverified_sources);
+}
+
+#[test]
+fn duplicate_resolved_source_names_are_rejected() {
+    let toml_str = r#"
+[package]
+name = "duplicates"
+version = "1.0"
+summary = "Duplicate sources"
+license = "MIT"
+description = "Duplicate resolved source names."
+sources = ["https://one.example/data.tar.gz", "https://two.example/data.tar.gz"]
+sha256sums = ["SKIP", "SKIP"]
+"#;
+    let spec = parse_pkgspec(toml_str).unwrap();
+    let result = validate(&spec, Path::new("."));
+    assert!(result.has_errors());
+    assert!(has_diagnostic_matching(&result, "resolved filename"));
+}
+
+#[test]
+fn unsafe_resolved_source_name_is_rejected_during_validation() {
+    let toml_str = r#"
+[package]
+name = "unsafe-source"
+version = "1.0"
+summary = "Unsafe source"
+license = "MIT"
+description = "Unsafe resolved source name."
+sources = ["../data::https://example.org/data"]
+sha256sums = ["SKIP"]
+"#;
+    let spec = parse_pkgspec(toml_str).unwrap();
+    let result = validate(&spec, Path::new("."));
+    assert!(result.has_errors());
+    assert!(has_diagnostic_matching(&result, "unsafe filename"));
 }

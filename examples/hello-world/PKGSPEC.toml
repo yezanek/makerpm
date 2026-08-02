@@ -4,6 +4,7 @@ version = "1.0"
 summary = "A friendly greeting program"
 license = "MIT"
 description = "hello-world prints a friendly greeting to standard output."
+noarch = true
 sources = ["hello-world-1.0.tar.gz"]
 
 [package.build]

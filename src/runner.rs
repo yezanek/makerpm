@@ -14,12 +14,10 @@ const STDERR_TAIL_LINES: usize = 50;
 /// [`MakerpmError::RpmbuildFailed`] with the exit code and tail of stderr.
 pub fn run_rpmbuild(topdir: &Path, spec_name: &str) -> Result<(), MakerpmError> {
     let spec_path = topdir.join("SPECS").join(format!("{spec_name}.spec"));
-    let topdir_abs = topdir
-        .canonicalize()
-        .map_err(|e| MakerpmError::Io {
-            path: topdir.to_path_buf(),
-            source: e,
-        })?;
+    let topdir_abs = topdir.canonicalize().map_err(|e| MakerpmError::Io {
+        path: topdir.to_path_buf(),
+        source: e,
+    })?;
     let topdir_str = topdir_abs.to_string_lossy().to_string();
 
     let mut child = Command::new("rpmbuild")
@@ -33,7 +31,10 @@ pub fn run_rpmbuild(topdir: &Path, spec_name: &str) -> Result<(), MakerpmError> 
             source: e,
         })?;
 
-    let stdout = child.stdout.take().unwrap();
+    let stdout = child.stdout.take().ok_or_else(|| MakerpmError::Io {
+        path: PathBuf::from("rpmbuild stdout"),
+        source: std::io::Error::other("failed to capture rpmbuild stdout"),
+    })?;
     let stdout_thread = thread::spawn(move || {
         let reader = BufReader::new(stdout);
         for line in reader.lines() {
@@ -44,7 +45,10 @@ pub fn run_rpmbuild(topdir: &Path, spec_name: &str) -> Result<(), MakerpmError> 
         }
     });
 
-    let stderr = child.stderr.take().unwrap();
+    let stderr = child.stderr.take().ok_or_else(|| MakerpmError::Io {
+        path: PathBuf::from("rpmbuild stderr"),
+        source: std::io::Error::other("failed to capture rpmbuild stderr"),
+    })?;
     let stderr_thread = thread::spawn(move || {
         let reader = BufReader::new(stderr);
         let mut tail = VecDeque::new();
@@ -68,8 +72,14 @@ pub fn run_rpmbuild(topdir: &Path, spec_name: &str) -> Result<(), MakerpmError> 
         source: e,
     })?;
 
-    stdout_thread.join().unwrap();
-    let stderr_tail = stderr_thread.join().unwrap();
+    stdout_thread.join().map_err(|_| MakerpmError::Io {
+        path: PathBuf::from("rpmbuild stdout"),
+        source: std::io::Error::other("rpmbuild stdout reader thread panicked"),
+    })?;
+    let stderr_tail = stderr_thread.join().map_err(|_| MakerpmError::Io {
+        path: PathBuf::from("rpmbuild stderr"),
+        source: std::io::Error::other("rpmbuild stderr reader thread panicked"),
+    })?;
 
     if !status.success() {
         return Err(MakerpmError::RpmbuildFailed {
@@ -122,7 +132,10 @@ fn collect_rpms_from_dir(
         if path.is_dir() {
             collect_rpms_from_dir(&path, output_dir, artifacts)?;
         } else if path.extension().is_some_and(|ext| ext == "rpm") {
-            let filename = path.file_name().unwrap();
+            let filename = path.file_name().ok_or_else(|| MakerpmError::Io {
+                path: path.clone(),
+                source: std::io::Error::other("RPM artifact has no filename"),
+            })?;
             let dest = output_dir.join(filename);
             std::fs::copy(&path, &dest).map_err(|e| MakerpmError::Io {
                 path: dest.clone(),
@@ -159,7 +172,11 @@ mod tests {
         let output = tmp.path().join("output");
 
         std::fs::create_dir_all(topdir.join("RPMS/x86_64")).unwrap();
-        std::fs::write(topdir.join("RPMS/x86_64/test-1.0-1.x86_64.rpm"), b"fake-rpm").unwrap();
+        std::fs::write(
+            topdir.join("RPMS/x86_64/test-1.0-1.x86_64.rpm"),
+            b"fake-rpm",
+        )
+        .unwrap();
         std::fs::create_dir_all(topdir.join("SRPMS")).unwrap();
         std::fs::write(topdir.join("SRPMS/test-1.0-1.src.rpm"), b"fake-srpm").unwrap();
 

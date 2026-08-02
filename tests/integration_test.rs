@@ -11,8 +11,7 @@ fn makerpm() -> Command {
 #[test]
 #[ignore = "requires rpmbuild installed"]
 fn build_hello_world_end_to_end() {
-    let spec_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("examples/hello-world/PKGSPEC.toml");
+    let spec_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/hello-world/PKGSPEC.toml");
     let output_dir = tempfile::tempdir().unwrap();
 
     makerpm()
@@ -36,17 +35,18 @@ fn build_hello_world_end_to_end() {
         output_dir.path().display()
     );
 
-    let has_binary_rpm = rpms
-        .iter()
-        .any(|e| e.path().to_string_lossy().contains("hello-world") && !e.path().to_string_lossy().contains(".src."));
+    let has_binary_rpm = rpms.iter().any(|e| {
+        e.path().to_string_lossy().contains("hello-world")
+            && !e.path().to_string_lossy().contains(".src.")
+    });
     assert!(has_binary_rpm, "expected a hello-world binary RPM");
 }
 
 #[test]
 #[ignore = "requires rpmbuild and network access"]
 fn build_remote_source_end_to_end() {
-    let spec_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("examples/remote-hello/PKGSPEC.toml");
+    let spec_path =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/remote-hello/PKGSPEC.toml");
     let output_dir = tempfile::tempdir().unwrap();
 
     makerpm()

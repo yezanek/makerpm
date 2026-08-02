@@ -12,6 +12,7 @@ invokes `rpmbuild` to produce the final `.rpm` files — all in one command.
 - **rpm-build** — required at build time by `rpmbuild`, which `makerpm`
   shells out to. On Fedora/RHEL: `sudo dnf install rpm-build`. On
   openSUSE: `sudo zypper install rpm-build`.
+- **curl** — required only when downloading an `ftp://` source.
 
 ## Building
 
@@ -41,7 +42,7 @@ makerpm build
 ## CLI usage
 
 ```
-makerpm build [--spec-file PKGSPEC.toml] [--output-dir DIR] [FLAGS]
+makerpm build [--spec-file PKGSPEC.toml] [--output-dir DIR] [FLAGS] [-v|-vv]
 makerpm spec  [--spec-file PKGSPEC.toml] [--output FILE]
 makerpm fetch [--spec-file PKGSPEC.toml] [FLAGS]
 makerpm validate [--spec-file PKGSPEC.toml]

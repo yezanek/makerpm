@@ -57,10 +57,7 @@ pub fn setup_build_tree(
 
     for dir in RPM_DIRS {
         let path = topdir.join(dir);
-        std::fs::create_dir_all(&path).map_err(|e| MakerpmError::Io {
-            path,
-            source: e,
-        })?;
+        std::fs::create_dir_all(&path).map_err(|e| MakerpmError::Io { path, source: e })?;
     }
 
     for source in resolved_sources {

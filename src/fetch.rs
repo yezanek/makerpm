@@ -19,11 +19,14 @@ pub struct UreqDownloader;
 
 impl Downloader for UreqDownloader {
     fn download_to(&self, url: &str, dest: &Path) -> Result<u64, MakerpmError> {
-        let response =
-            ureq::get(url).call().map_err(|e| MakerpmError::Fetch {
-                url: url.to_string(),
-                source: Box::new(e),
-            })?;
+        if url::Url::parse(url).is_ok_and(|parsed| parsed.scheme() == "ftp") {
+            return download_ftp_with_curl(url, dest);
+        }
+
+        let response = ureq::get(url).call().map_err(|e| MakerpmError::Fetch {
+            url: url.to_string(),
+            source: Box::new(e),
+        })?;
 
         let total = response.body().content_length();
 
@@ -71,6 +74,33 @@ impl Downloader for UreqDownloader {
 
         Ok(written)
     }
+}
+
+fn download_ftp_with_curl(url: &str, dest: &Path) -> Result<u64, MakerpmError> {
+    let status = std::process::Command::new("curl")
+        .args(["--fail", "--location", "--max-redirs", "10", "--output"])
+        .arg(dest)
+        .arg("--")
+        .arg(url)
+        .status()
+        .map_err(|source| MakerpmError::Fetch {
+            url: url.to_string(),
+            source: Box::new(source),
+        })?;
+    if !status.success() {
+        return Err(MakerpmError::Fetch {
+            url: url.to_string(),
+            source: Box::new(std::io::Error::other(format!(
+                "curl exited with status {status}"
+            ))),
+        });
+    }
+    std::fs::metadata(dest)
+        .map(|metadata| metadata.len())
+        .map_err(|source| MakerpmError::Io {
+            path: dest.to_path_buf(),
+            source,
+        })
 }
 
 /// Resolve the cache directory for downloaded sources.
@@ -161,7 +191,6 @@ pub struct FetchOptions {
     pub offline: bool,
     pub refetch: bool,
     pub skip_checksums: bool,
-    pub allow_unverified: bool,
 }
 
 /// Where a resolved source now lives on disk.
@@ -215,7 +244,10 @@ pub fn fetch_sources(
                     was_download: false,
                 });
             }
-            SourceEntry::Remote { ref filename, ref url } => {
+            SourceEntry::Remote {
+                ref filename,
+                ref url,
+            } => {
                 validate_cache_filename(filename)?;
                 let cache_path = cache_path_for(&opts.cache_dir, filename);
                 let declared_checksum = checksum_for(spec, idx, _kind);
@@ -336,13 +368,10 @@ mod tests {
     impl Downloader for MockDownloader {
         fn download_to(&self, url: &str, dest: &Path) -> Result<u64, MakerpmError> {
             self.calls.lock().unwrap().push(url.to_string());
-            let data = self
-                .responses
-                .get(url)
-                .ok_or_else(|| MakerpmError::Fetch {
-                    url: url.to_string(),
-                    source: Box::new(std::io::Error::other("no mock response configured")),
-                })?;
+            let data = self.responses.get(url).ok_or_else(|| MakerpmError::Fetch {
+                url: url.to_string(),
+                source: Box::new(std::io::Error::other("no mock response configured")),
+            })?;
             std::fs::write(dest, data).map_err(|e| MakerpmError::Fetch {
                 url: url.to_string(),
                 source: Box::new(e),
@@ -384,7 +413,6 @@ mod tests {
             offline: false,
             refetch: false,
             skip_checksums: false,
-            allow_unverified: false,
         }
     }
 
@@ -418,19 +446,33 @@ mod tests {
         std::fs::create_dir_all(&cache_dir).unwrap();
 
         let content = b"downloaded data";
-        let spec = make_spec(
-            vec!["data.bin::https://example.com/data.bin"],
-            vec!["SKIP"],
-        );
+        let spec = make_spec(vec!["data.bin::https://example.com/data.bin"], vec!["SKIP"]);
         let opts = opts_with_cache(&cache_dir);
-        let dl = MockDownloader::new()
-            .with_response("https://example.com/data.bin", content.to_vec());
+        let dl =
+            MockDownloader::new().with_response("https://example.com/data.bin", content.to_vec());
 
         let results = fetch_sources(&spec, tmp.path(), &opts, &dl).unwrap();
         assert_eq!(results.len(), 1);
         assert!(results[0].was_download);
         assert_eq!(dl.calls(), vec!["https://example.com/data.bin"]);
         assert!(cache_dir.join("data.bin").exists());
+    }
+
+    #[test]
+    fn bare_ftp_source_uses_downloader() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cache_dir = tmp.path().join("cache");
+        std::fs::create_dir_all(&cache_dir).unwrap();
+
+        let content = b"ftp data";
+        let spec = make_spec(vec!["ftp://example.com/data.bin"], vec!["SKIP"]);
+        let opts = opts_with_cache(&cache_dir);
+        let dl =
+            MockDownloader::new().with_response("ftp://example.com/data.bin", content.to_vec());
+
+        let results = fetch_sources(&spec, tmp.path(), &opts, &dl).unwrap();
+        assert_eq!(results[0].filename, "data.bin");
+        assert_eq!(dl.calls(), vec!["ftp://example.com/data.bin"]);
     }
 
     #[test]
@@ -446,8 +488,8 @@ mod tests {
             vec![&bad_digest],
         );
         let opts = opts_with_cache(&cache_dir);
-        let dl = MockDownloader::new()
-            .with_response("https://example.com/data.bin", content.to_vec());
+        let dl =
+            MockDownloader::new().with_response("https://example.com/data.bin", content.to_vec());
 
         let result = fetch_sources(&spec, tmp.path(), &opts, &dl);
         assert!(result.is_err());
@@ -473,8 +515,8 @@ mod tests {
         );
         let mut opts = opts_with_cache(&cache_dir);
         opts.skip_checksums = true;
-        let dl = MockDownloader::new()
-            .with_response("https://example.com/data.bin", content.to_vec());
+        let dl =
+            MockDownloader::new().with_response("https://example.com/data.bin", content.to_vec());
 
         let results = fetch_sources(&spec, tmp.path(), &opts, &dl).unwrap();
         assert_eq!(results.len(), 1);
@@ -487,10 +529,7 @@ mod tests {
         let cache_dir = tmp.path().join("cache");
         std::fs::create_dir_all(&cache_dir).unwrap();
 
-        let spec = make_spec(
-            vec!["data.bin::https://example.com/data.bin"],
-            vec!["SKIP"],
-        );
+        let spec = make_spec(vec!["data.bin::https://example.com/data.bin"], vec!["SKIP"]);
         let mut opts = opts_with_cache(&cache_dir);
         opts.offline = true;
         let dl = MockDownloader::new();
@@ -538,10 +577,7 @@ mod tests {
         std::fs::write(cache_dir.join("data.bin"), old_content).unwrap();
 
         let new_content = b"new data";
-        let spec = make_spec(
-            vec!["data.bin::https://example.com/data.bin"],
-            vec!["SKIP"],
-        );
+        let spec = make_spec(vec!["data.bin::https://example.com/data.bin"], vec!["SKIP"]);
         let mut opts = opts_with_cache(&cache_dir);
         opts.refetch = true;
         let dl = MockDownloader::new()
@@ -583,17 +619,17 @@ mod tests {
         std::fs::create_dir_all(&cache_dir).unwrap();
 
         let content = b"garbage content";
-        let spec = make_spec(
-            vec!["data.bin::https://example.com/data.bin"],
-            vec!["SKIP"],
-        );
+        let spec = make_spec(vec!["data.bin::https://example.com/data.bin"], vec!["SKIP"]);
         let opts = opts_with_cache(&cache_dir);
-        let dl = MockDownloader::new()
-            .with_response("https://example.com/data.bin", content.to_vec());
+        let dl =
+            MockDownloader::new().with_response("https://example.com/data.bin", content.to_vec());
 
         let results = fetch_sources(&spec, tmp.path(), &opts, &dl).unwrap();
         assert_eq!(results.len(), 1);
-        assert!(results[0].was_download, "cache miss should trigger download");
+        assert!(
+            results[0].was_download,
+            "cache miss should trigger download"
+        );
         assert_eq!(std::fs::read(cache_dir.join("data.bin")).unwrap(), content);
     }
 
@@ -604,13 +640,10 @@ mod tests {
         std::fs::create_dir_all(&cache_dir).unwrap();
 
         let content = b"anything";
-        let spec = make_spec(
-            vec!["data.bin::https://example.com/data.bin"],
-            vec![],
-        );
+        let spec = make_spec(vec!["data.bin::https://example.com/data.bin"], vec![]);
         let opts = opts_with_cache(&cache_dir);
-        let dl = MockDownloader::new()
-            .with_response("https://example.com/data.bin", content.to_vec());
+        let dl =
+            MockDownloader::new().with_response("https://example.com/data.bin", content.to_vec());
 
         let results = fetch_sources(&spec, tmp.path(), &opts, &dl).unwrap();
         assert_eq!(results.len(), 1);
@@ -637,17 +670,16 @@ mod tests {
             }
         }
 
-        let spec = make_spec(
-            vec!["data.bin::https://example.com/data.bin"],
-            vec!["SKIP"],
-        );
+        let spec = make_spec(vec!["data.bin::https://example.com/data.bin"], vec!["SKIP"]);
         let opts = opts_with_cache(&cache_dir);
         let dl = FailingDownloader;
 
         let result = fetch_sources(&spec, tmp.path(), &opts, &dl);
         assert!(result.is_err());
         assert!(!cache_path_for(&cache_dir, "data.bin").exists());
-        assert!(!cache_path_for(&cache_dir, "data.bin").with_extension("part").exists());
+        assert!(!cache_path_for(&cache_dir, "data.bin")
+            .with_extension("part")
+            .exists());
     }
 
     #[test]
