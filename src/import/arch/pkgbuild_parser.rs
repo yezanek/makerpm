@@ -55,9 +55,9 @@ pub fn parse(input: &str) -> Result<ParsedPkgbuild, ParseError> {
             continue;
         }
 
-        if let Some(terminator) = control_block_terminator(trimmed) {
+        if control_block_terminator(trimmed).is_some() {
             parsed.has_additional_logic = true;
-            index = skip_control_block(&lines, index, terminator);
+            index = skip_control_block(&lines, index);
             continue;
         }
 
@@ -113,22 +113,30 @@ fn control_block_terminator(line: &str) -> Option<&'static str> {
     }
 }
 
-fn skip_control_block(lines: &[&str], start: usize, terminator: &str) -> usize {
-    if control_token_count(lines[start], terminator) > 0 {
-        return start + 1;
-    }
-
-    let mut depth = 1_usize;
-    for (offset, line) in lines[start + 1..].iter().enumerate() {
-        if control_block_terminator(line.trim()) == Some(terminator) {
-            depth += 1;
-        }
-        depth = depth.saturating_sub(control_token_count(line, terminator));
+fn skip_control_block(lines: &[&str], start: usize) -> usize {
+    let mut depth = 0_usize;
+    for (offset, line) in lines[start..].iter().enumerate() {
+        depth += control_block_opener_count(line);
+        depth = depth.saturating_sub(control_block_terminator_count(line));
         if depth == 0 {
-            return start + offset + 2;
+            return start + offset + 1;
         }
     }
     lines.len()
+}
+
+fn control_block_opener_count(line: &str) -> usize {
+    ["if", "case", "for", "while", "until", "select"]
+        .into_iter()
+        .map(|token| control_token_count(line, token))
+        .sum()
+}
+
+fn control_block_terminator_count(line: &str) -> usize {
+    ["fi", "esac", "done"]
+        .into_iter()
+        .map(|token| control_token_count(line, token))
+        .sum()
 }
 
 fn control_token_count(line: &str, token: &str) -> usize {
@@ -555,6 +563,39 @@ pkgver=1.0
             parsed.assignments["pkgver"],
             AssignmentValue::Scalar("1.0".to_string())
         );
+    }
+
+    #[test]
+    fn counts_nested_control_openers_after_other_tokens() {
+        let parsed = parse(
+            "if true; then\n\
+               command && if false; then\n\
+                 pkgname=ignored\n\
+               fi\n\
+             fi\n\
+             pkgname=sample\n",
+        )
+        .unwrap();
+        assert_eq!(
+            parsed.assignments["pkgname"],
+            AssignmentValue::Scalar("sample".to_string())
+        );
+    }
+
+    #[test]
+    fn counts_nested_openers_on_the_initial_control_line() {
+        let parsed = parse(
+            "if true; then if false; then pkgname=ignored; fi\n\
+               pkgver=ignored\n\
+             fi\n\
+             pkgname=sample\n",
+        )
+        .unwrap();
+        assert_eq!(
+            parsed.assignments["pkgname"],
+            AssignmentValue::Scalar("sample".to_string())
+        );
+        assert!(!parsed.assignments.contains_key("pkgver"));
     }
 
     #[test]

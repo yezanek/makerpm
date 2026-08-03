@@ -21,6 +21,15 @@ pub fn translate(dependency: &str) -> TranslatedDependency {
     }
 
     let (name, constraint) = split_constraint(dependency);
+    if name.contains('$') {
+        return unsupported(
+            "",
+            "Debian substitution variable in package name was not evaluated",
+        );
+    }
+    if name.contains(['<', '>']) {
+        return unsupported("", "Debian build-profile qualifier was not evaluated");
+    }
     if constraint.is_some_and(|constraint| constraint.contains('$')) {
         return unsupported(
             dependency,
@@ -163,5 +172,10 @@ mod tests {
             translate("sample (= ${binary:Version})").confidence,
             Confidence::Unsupported
         );
+        for dependency in ["${misc:Depends}", "foo <!nocheck>"] {
+            let translated = translate(dependency);
+            assert_eq!(translated.confidence, Confidence::Unsupported);
+            assert!(translated.value.is_empty());
+        }
     }
 }

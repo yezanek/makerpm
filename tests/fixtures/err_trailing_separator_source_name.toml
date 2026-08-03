@@ -1,0 +1,8 @@
+[package]
+name = "trailing-separator"
+version = "1.0"
+summary = "Trailing separator"
+license = "MIT"
+description = "Rejects normalized filenames."
+sources = ["data/::https://example.org/data"]
+sha256sums = ["SKIP"]

@@ -116,6 +116,25 @@ pub fn draft_from_parsed(parsed: &ParsedPkgbuild) -> Result<ImportDraft, ArchImp
         );
     }
 
+    let epoch = parsed
+        .assignments
+        .get("epoch")
+        .and_then(|value| first(value).parse::<u32>().ok());
+    if parsed.assignments.contains_key("epoch") {
+        if epoch.is_some()
+            && !flag_command_substitution(parsed, "epoch", "package.epoch", &mut notes)
+        {
+            confident(&mut notes, "package.epoch", "copied directly from epoch");
+        } else if epoch.is_none() {
+            note(
+                &mut notes,
+                "package.epoch",
+                "PKGBUILD epoch is not a static unsigned integer; set it manually",
+                Confidence::Unsupported,
+            );
+        }
+    }
+
     let summary = first(required(parsed, "pkgdesc")?).to_string();
     if !flag_command_substitution(parsed, "pkgdesc", "package.summary", &mut notes) {
         confident(
@@ -269,6 +288,7 @@ pub fn draft_from_parsed(parsed: &ParsedPkgbuild) -> Result<ImportDraft, ArchImp
         "pkgname",
         "pkgver",
         "pkgrel",
+        "epoch",
         "pkgdesc",
         "arch",
         "url",
@@ -311,7 +331,7 @@ pub fn draft_from_parsed(parsed: &ParsedPkgbuild) -> Result<ImportDraft, ArchImp
                 name,
                 version,
                 release,
-                epoch: None,
+                epoch,
                 summary: summary.clone(),
                 license,
                 url,
@@ -455,13 +475,35 @@ fn import_optdepends(
 
 fn import_checksums(parsed: &ParsedPkgbuild, notes: &mut Vec<ImportNote>) -> Vec<String> {
     if let Some(sha256) = parsed.assignments.get("sha256sums") {
-        let sums = sha256.values().into_iter().map(str::to_string).collect();
+        let sums = sha256
+            .values()
+            .into_iter()
+            .map(str::to_string)
+            .collect::<Vec<_>>();
         if !flag_command_substitution(parsed, "sha256sums", "package.sha256sums", notes) {
-            confident(
-                notes,
-                "package.sha256sums",
-                "copied directly from sha256sums",
-            );
+            let source_count = parsed
+                .assignments
+                .iter()
+                .filter(|(field, _)| *field == "source" || field.starts_with("source_"))
+                .map(|(_, value)| value.values().len())
+                .sum::<usize>();
+            if sums.len() == source_count {
+                confident(
+                    notes,
+                    "package.sha256sums",
+                    "copied directly from sha256sums",
+                );
+            } else {
+                note(
+                    notes,
+                    "package.sha256sums",
+                    format!(
+                        "copied directly from sha256sums, but found {} checksums for {source_count} effective source entries",
+                        sums.len()
+                    ),
+                    Confidence::BestEffort,
+                );
+            }
         }
         return sums;
     }
@@ -596,6 +638,7 @@ mod tests {
 pkgname=hello-arch
 pkgver=1.2.3
 pkgrel=4
+epoch=2
 pkgdesc='A friendly example package with enough detail for RPM metadata'
 arch=('any')
 url='https://example.test/hello'
@@ -633,6 +676,7 @@ check() {
     fn maps_a_complete_pkgbuild_and_round_trips_through_lint() {
         let draft = draft(PKGBUILD);
         assert!(draft.spec.package.noarch);
+        assert_eq!(draft.spec.package.epoch, Some(2));
         assert_eq!(draft.spec.package.deps.depends, ["openssl >= 3", "libx86"]);
         assert_eq!(draft.spec.package.deps.recommends, ["bash"]);
         assert!(draft
@@ -705,6 +749,22 @@ check() {
             note.field_path == "package.sha256sums"
                 && note.note.contains("b2sums")
                 && note.confidence == Confidence::Unsupported
+        }));
+    }
+
+    #[test]
+    fn checksum_confidence_accounts_for_architecture_specific_sources() {
+        let input = PKGBUILD.replace(
+            "source=('https://example.test/hello-1.2.3.tar.gz')",
+            "source=('https://example.test/hello-1.2.3.tar.gz')\nsource_x86_64=('extra.tar.gz')",
+        );
+        let draft = draft(&input);
+        assert!(draft.notes.iter().any(|note| {
+            note.field_path == "package.sha256sums"
+                && note.confidence == Confidence::BestEffort
+                && note
+                    .note
+                    .contains("1 checksums for 2 effective source entries")
         }));
     }
 

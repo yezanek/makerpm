@@ -68,8 +68,8 @@ pub fn lint(spec: &PkgSpecFile, toml_dir: &Path, raw_toml: &str) -> LintResult {
 
     lint_version(&spec.package.version, &mut findings);
     lint_licenses(spec, &mut findings);
-    lint_sources(spec, toml_dir, &mut findings);
     lint_source_filenames(spec, &mut findings);
+    lint_sources(spec, toml_dir, &mut findings);
     lint_sha256_lengths(spec, &mut findings);
     let has_unverified = lint_unverified_sources(spec, &mut findings);
     lint_subpackages(spec, &mut findings);
@@ -155,6 +155,9 @@ fn lint_sources(spec: &PkgSpecFile, toml_dir: &Path, findings: &mut Vec<LintFind
                 ));
                 continue;
             }
+            if !is_safe_source_filename(&filename) {
+                continue;
+            }
             let path = toml_dir.join(&filename);
             if !path.exists() {
                 findings.push(LintFinding::error(
@@ -233,13 +236,7 @@ fn lint_source_filenames(spec: &PkgSpecFile, findings: &mut Vec<LintFinding>) {
         let filename = match source_spec::parse_source_entry(raw) {
             SourceEntry::Local { filename } | SourceEntry::Remote { filename, .. } => filename,
         };
-        let path = Path::new(&filename);
-        let is_single_exact_component = matches!(
-            path.components().next(),
-            Some(std::path::Component::Normal(component))
-                if path.components().count() == 1 && component == path.as_os_str()
-        );
-        if filename.is_empty() || !is_single_exact_component {
+        if !is_safe_source_filename(&filename) {
             findings.push(LintFinding::error(format!("package.{kind}s[{index}]"), format!(
                 "{kind} entry {} resolves to an unsafe filename: {filename:?}; filenames must be a single path component",
                 index + 1
@@ -253,6 +250,16 @@ fn lint_source_filenames(spec: &PkgSpecFile, findings: &mut Vec<LintFinding>) {
             )));
         }
     }
+}
+
+fn is_safe_source_filename(filename: &str) -> bool {
+    let path = Path::new(filename);
+    !filename.is_empty()
+        && matches!(
+            path.components().next(),
+            Some(std::path::Component::Normal(component))
+                if path.components().count() == 1 && component == path.as_os_str()
+        )
 }
 
 fn lint_unverified_sources(spec: &PkgSpecFile, findings: &mut Vec<LintFinding>) -> bool {
@@ -437,15 +444,106 @@ fn lint_descriptions(spec: &PkgSpecFile, findings: &mut Vec<LintFinding>) {
 }
 
 fn lint_todo_comments(raw_toml: &str, findings: &mut Vec<LintFinding>) {
-    for (index, line) in raw_toml.lines().enumerate() {
-        if line.contains("# TODO") {
-            findings.push(LintFinding::warning(
-                format!("line {}", index + 1),
-                "unresolved # TODO comment in package definition",
-                "review the imported value and remove the TODO comment",
-            ));
+    for line in toml_todo_comment_lines(raw_toml) {
+        findings.push(LintFinding::warning(
+            format!("line {line}"),
+            "unresolved # TODO comment in package definition",
+            "review the imported value and remove the TODO comment",
+        ));
+    }
+}
+
+fn toml_todo_comment_lines(raw_toml: &str) -> Vec<usize> {
+    #[derive(Clone, Copy)]
+    enum StringKind {
+        Basic,
+        Literal,
+        MultilineBasic,
+        MultilineLiteral,
+    }
+
+    let bytes = raw_toml.as_bytes();
+    let mut lines = Vec::new();
+    let mut index = 0;
+    let mut line = 1;
+    let mut string = None;
+    let mut escaped = false;
+
+    while index < bytes.len() {
+        if bytes[index] == b'\n' {
+            line += 1;
+            escaped = false;
+            index += 1;
+            continue;
+        }
+
+        match string {
+            Some(StringKind::Basic) => {
+                if escaped {
+                    escaped = false;
+                } else if bytes[index] == b'\\' {
+                    escaped = true;
+                } else if bytes[index] == b'"' {
+                    string = None;
+                }
+                index += 1;
+            }
+            Some(StringKind::Literal) => {
+                if bytes[index] == b'\'' {
+                    string = None;
+                }
+                index += 1;
+            }
+            Some(StringKind::MultilineBasic) => {
+                if bytes[index..].starts_with(b"\"\"\"") && !escaped {
+                    string = None;
+                    index += 3;
+                } else {
+                    escaped = bytes[index] == b'\\' && !escaped;
+                    if bytes[index] != b'\\' {
+                        escaped = false;
+                    }
+                    index += 1;
+                }
+            }
+            Some(StringKind::MultilineLiteral) => {
+                if bytes[index..].starts_with(b"'''") {
+                    string = None;
+                    index += 3;
+                } else {
+                    index += 1;
+                }
+            }
+            None if bytes[index] == b'#' => {
+                let end = bytes[index..]
+                    .iter()
+                    .position(|byte| *byte == b'\n')
+                    .map_or(bytes.len(), |offset| index + offset);
+                if raw_toml[index..end].contains("# TODO") {
+                    lines.push(line);
+                }
+                index = end;
+            }
+            None if bytes[index..].starts_with(b"\"\"\"") => {
+                string = Some(StringKind::MultilineBasic);
+                index += 3;
+            }
+            None if bytes[index..].starts_with(b"'''") => {
+                string = Some(StringKind::MultilineLiteral);
+                index += 3;
+            }
+            None if bytes[index] == b'"' => {
+                string = Some(StringKind::Basic);
+                index += 1;
+            }
+            None if bytes[index] == b'\'' => {
+                string = Some(StringKind::Literal);
+                index += 1;
+            }
+            None => index += 1,
         }
     }
+    lines
 }
 
 fn lint_file_overlap(spec: &PkgSpecFile, findings: &mut Vec<LintFinding>) {

@@ -1,0 +1,18 @@
+[package]
+name = "subpkg-build"
+version = "1.0"
+summary = "Package with subpackage build deps"
+license = "MIT"
+description = "Tests subpackage build deps."
+
+[package.files]
+paths = ["/usr/bin/subpkg-build"]
+
+[[subpackage]]
+suffix = "devel"
+summary = "Devel"
+description = "Dev files."
+files.paths = ["/usr/include/subpkg-build/"]
+
+[subpackage.deps]
+build_depends = ["cmake"]

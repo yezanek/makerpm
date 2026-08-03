@@ -1,0 +1,8 @@
+[package]
+name = "unsafe-local"
+version = "1.0"
+summary = "Unsafe local source"
+license = "MIT"
+description = "Rejects traversal before filesystem access."
+sources = ["../outside.tar.gz"]
+sha256sums = ["SKIP"]

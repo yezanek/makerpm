@@ -149,37 +149,14 @@ fn valid_minimal_has_no_errors() {
 
 #[test]
 fn auto_inject_build_requires() {
-    let toml_str = r#"
-[package]
-name = "cmake-pkg"
-version = "1.0"
-summary = "Cmake package"
-license = "MIT"
-description = "Tests auto-injection."
-
-[package.build]
-system = "cmake"
-"#;
-    let spec = parse_rpmspec(toml_str).unwrap();
-    let result = lint(&spec, Path::new("."), toml_str);
+    let result = load_and_lint("inject_cmake_build_requires.toml");
     assert!(result.injected_build_deps.contains(&"cmake".to_string()));
     assert!(result.injected_build_deps.contains(&"gcc-c++".to_string()));
 }
 
 #[test]
 fn patch_sha256_length_mismatch() {
-    let toml_str = r#"
-[package]
-name = "patch-mismatch"
-version = "1.0"
-summary = "Test"
-license = "MIT"
-description = "Test"
-patches = ["fix.patch"]
-patch_sha256sums = ["abc", "def"]
-"#;
-    let spec = parse_rpmspec(toml_str).unwrap();
-    let result = lint(&spec, Path::new("."), toml_str);
+    let result = load_and_lint("err_patch_sha256_length_mismatch.toml");
     assert!(result.has_errors());
     assert!(has_error(
         &result,
@@ -189,114 +166,59 @@ patch_sha256sums = ["abc", "def"]
 
 #[test]
 fn subpackage_build_deps_detected_during_lint() {
-    let toml_str = r#"
-[package]
-name = "subpkg-build"
-version = "1.0"
-summary = "Package with subpackage build deps"
-license = "MIT"
-description = "Tests subpackage build deps."
-
-[package.files]
-paths = ["/usr/bin/subpkg-build"]
-
-[[subpackage]]
-suffix = "devel"
-summary = "Devel"
-description = "Dev files."
-files.paths = ["/usr/include/subpkg-build/"]
-
-[subpackage.deps]
-build_depends = ["cmake"]
-"#;
-    let spec = parse_rpmspec(toml_str).unwrap();
-    let result = lint(&spec, Path::new("."), toml_str);
+    let result = load_and_lint("valid_subpackage_build_deps.toml");
     assert!(!result.has_errors());
 }
 
 #[test]
 fn has_unverified_sources_flag_set() {
-    let toml_str = r#"
-[package]
-name = "unverified"
-version = "1.0"
-summary = "Unverified remote source"
-license = "MIT"
-description = "Remote source without checksum."
-sources = ["https://example.org/file.tar.gz"]
-"#;
-    let spec = parse_rpmspec(toml_str).unwrap();
-    let result = lint(&spec, Path::new("."), toml_str);
+    let result = load_and_lint("warn_source_unverified.toml");
     assert!(result.has_unverified_sources);
 }
 
 #[test]
 fn no_unverified_sources_when_checksums_present() {
-    let toml_str = r#"
-[package]
-name = "verified"
-version = "1.0"
-summary = "Verified remote source"
-license = "MIT"
-description = "Remote source with checksum."
-sources = ["https://example.org/file.tar.gz"]
-sha256sums = ["9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a00"]
-"#;
-    let spec = parse_rpmspec(toml_str).unwrap();
-    let result = lint(&spec, Path::new("."), toml_str);
+    let result = load_and_lint("valid_source_verified.toml");
     assert!(!result.has_unverified_sources);
 }
 
 #[test]
 fn duplicate_resolved_source_names_are_rejected() {
-    let toml_str = r#"
-[package]
-name = "duplicates"
-version = "1.0"
-summary = "Duplicate sources"
-license = "MIT"
-description = "Duplicate resolved source names."
-sources = ["https://one.example/data.tar.gz", "https://two.example/data.tar.gz"]
-sha256sums = ["SKIP", "SKIP"]
-"#;
-    let spec = parse_rpmspec(toml_str).unwrap();
-    let result = lint(&spec, Path::new("."), toml_str);
+    let result = load_and_lint("err_duplicate_source_names.toml");
     assert!(result.has_errors());
     assert!(has_error(&result, "resolved filename"));
 }
 
 #[test]
 fn unsafe_resolved_source_name_is_rejected_during_lint() {
-    let toml_str = r#"
-[package]
-name = "unsafe-source"
-version = "1.0"
-summary = "Unsafe source"
-license = "MIT"
-description = "Unsafe resolved source name."
-sources = ["../data::https://example.org/data"]
-sha256sums = ["SKIP"]
-"#;
-    let spec = parse_rpmspec(toml_str).unwrap();
-    let result = lint(&spec, Path::new("."), toml_str);
+    let result = load_and_lint("err_unsafe_source_name.toml");
     assert!(result.has_errors());
     assert!(has_error(&result, "unsafe filename"));
 }
 
 #[test]
 fn trailing_separator_resolved_source_name_is_rejected() {
-    let toml_str = r#"
-[package]
-name = "trailing-separator"
-version = "1.0"
-summary = "Trailing separator"
-license = "MIT"
-description = "Rejects normalized filenames."
-sources = ["data/::https://example.org/data"]
-sha256sums = ["SKIP"]
-"#;
-    let spec = parse_rpmspec(toml_str).unwrap();
-    let result = lint(&spec, Path::new("."), toml_str);
+    let result = load_and_lint("err_trailing_separator_source_name.toml");
     assert!(result.has_errors());
     assert!(has_error(&result, "unsafe filename"));
+}
+
+#[test]
+fn todo_text_inside_toml_strings_is_ignored() {
+    let result = load_and_lint("valid_todo_text_in_strings.toml");
+    assert!(!has_warning(&result, "unresolved # TODO"));
+}
+
+#[test]
+fn unsafe_local_source_does_not_expose_filesystem_state() {
+    let directory = tempfile::tempdir().unwrap();
+    let project = directory.path().join("project");
+    std::fs::create_dir(&project).unwrap();
+    std::fs::write(directory.path().join("outside.tar.gz"), "existing").unwrap();
+    let toml = load_fixture("err_unsafe_local_source.toml");
+    let spec = parse_rpmspec(&toml).unwrap();
+    let result = lint(&spec, &project, &toml);
+    assert!(has_error(&result, "unsafe filename"));
+    assert!(!has_error(&result, "local source file"));
+    assert!(!has_error(&result, "regular file"));
 }
