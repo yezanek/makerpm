@@ -121,11 +121,11 @@ pub fn draft_from_parsed(parsed: &ParsedPkgbuild) -> Result<ImportDraft, ArchImp
         .get("epoch")
         .and_then(|value| first(value).parse::<u32>().ok());
     if parsed.assignments.contains_key("epoch") {
-        if epoch.is_some()
-            && !flag_command_substitution(parsed, "epoch", "package.epoch", &mut notes)
-        {
+        let has_command_substitution =
+            flag_command_substitution(parsed, "epoch", "package.epoch", &mut notes);
+        if epoch.is_some() && !has_command_substitution {
             confident(&mut notes, "package.epoch", "copied directly from epoch");
-        } else if epoch.is_none() {
+        } else if epoch.is_none() && !has_command_substitution {
             note(
                 &mut notes,
                 "package.epoch",
@@ -701,6 +701,7 @@ check() {
     fn marks_dynamic_values_and_opaque_srcdir_use_unsupported() {
         let input = PKGBUILD
             .replace("pkgver=1.2.3", "pkgver=$(git describe --tags)")
+            .replace("epoch=2", "epoch=$(date +%s)")
             .replace(
                 "prepare() {",
                 "pkgver() {\n  git describe --tags\n}\nprepare() {",
@@ -712,6 +713,15 @@ check() {
         let draft = draft(&input);
         assert!(draft.notes.iter().any(|note| {
             note.field_path == "package.version" && note.confidence == Confidence::Unsupported
+        }));
+        assert!(draft.notes.iter().any(|note| {
+            note.field_path == "package.epoch"
+                && note.note.contains("unevaluated command substitution")
+                && note.confidence == Confidence::Unsupported
+        }));
+        assert!(!draft.notes.iter().any(|note| {
+            note.field_path == "package.epoch"
+                && note.note.contains("not a static unsigned integer")
         }));
         assert!(draft.notes.iter().any(|note| {
             note.field_path == "package.build.steps.prep"
