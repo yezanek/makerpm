@@ -2,7 +2,7 @@
 
 A command-line tool for building RPM packages from a single TOML file.
 Inspired by Arch Linux's `makepkg`/`PKGBUILD` workflow, `makerpm` reads a
-`PKGSPEC.toml`, validates it, downloads and checksum-verifies any declared
+`RPMSPEC.toml`, validates it, downloads and checksum-verifies any declared
 remote sources, transpiles the spec into a standard RPM `.spec` file, and
 invokes `rpmbuild` to produce the final `.rpm` files — all in one command.
 
@@ -30,10 +30,10 @@ cargo install --path .
 ## Quick start
 
 ```sh
-# Scaffold a starter PKGSPEC.toml (uses the directory name as the package name)
+# Scaffold a starter RPMSPEC.toml (uses the directory name as the package name)
 makerpm init
 
-# Edit PKGSPEC.toml with your package details, then build:
+# Edit RPMSPEC.toml with your package details, then build:
 makerpm build
 
 # RPMs are written to ./rpms/ by default (override with --output-dir)
@@ -43,26 +43,31 @@ makerpm build
 
 ```
 makerpm [-v|-vv|--verbose] <COMMAND>
-makerpm build [--spec-file PKGSPEC.toml] [--output-dir DIR] [FLAGS]
-makerpm spec  [--spec-file PKGSPEC.toml] [--output FILE]
-makerpm fetch [--spec-file PKGSPEC.toml] [FLAGS]
-makerpm validate [--spec-file PKGSPEC.toml]
-makerpm init [--name NAME]
+makerpm build [PATH] [--output-dir DIR] [FLAGS]
+makerpm spec  [PATH] [--output FILE]
+makerpm fetch [PATH] [FLAGS]
+makerpm lint  [PATH] [--strict]
+makerpm init [--name NAME] [-o PATH]
+makerpm import deb <SOURCE_DIR> -o <PATH> [--force]
+makerpm import arch <PKGBUILD> -o <PATH> [--force]
 ```
 
 `-v`, `-vv`, and `--verbose` are global options and work with every subcommand.
 
-`--spec-file` defaults to `./PKGSPEC.toml` in the current directory.
+`PATH` defaults to `./RPMSPEC.toml` in the current directory. The former
+`validate` command remains available as a hidden alias for `lint`.
 
 **Subcommands:**
 
 | Command | Description |
 |---|---|
-| `build` | Full pipeline: parse, validate, fetch sources, render `.spec`, invoke `rpmbuild`, collect RPMs |
+| `build` | Full pipeline: parse, lint, fetch sources, render `.spec`, invoke `rpmbuild`, collect RPMs |
 | `spec` | Render the `.spec` file only (no download, no build) |
 | `fetch` | Download and verify remote sources without building |
-| `validate` | Parse and validate the TOML, exit with code 1 on errors |
-| `init` | Create a starter `PKGSPEC.toml` in the current directory |
+| `lint` | Parse and lint the TOML; `--strict` also fails on warnings |
+| `init` | Create a starter `RPMSPEC.toml` (use `-o PATH` to select the output directory; defaults to the current directory) |
+| `import deb` | Convert extracted Debian source metadata into an annotated makerpm draft |
+| `import arch` | Convert a PKGBUILD into an annotated makerpm draft without executing shell code |
 
 **Build/fetch flags:**
 
@@ -77,7 +82,7 @@ FTP transfers have no total-duration limit by default. Set
 `MAKERPM_CURL_TIMEOUT` to a positive number of seconds to enforce one;
 connection attempts always time out after 30 seconds.
 
-## PKGSPEC.toml format
+## RPMSPEC.toml format
 
 ```toml
 [package]

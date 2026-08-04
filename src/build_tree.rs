@@ -45,7 +45,7 @@ fn validate_single_component(name: &str, context: &str) -> Result<(), MakerpmErr
 
 /// Set up the rpmbuild tree layout and stage sources + spec.
 ///
-/// Creates `.makerpm/` next to the PKGSPEC.toml as the `_topdir`.
+/// Creates `.makerpm/` next to the RPMSPEC.toml as the `_topdir`.
 /// Returns the path to the topdir.
 pub fn setup_build_tree(
     spec: &PkgSpecFile,

@@ -1,0 +1,8 @@
+[package]
+name = "duplicates"
+version = "1.0"
+summary = "Duplicate sources"
+license = "MIT"
+description = "Duplicate resolved source names."
+sources = ["https://one.example/data.tar.gz", "https://two.example/data.tar.gz"]
+sha256sums = ["SKIP", "SKIP"]

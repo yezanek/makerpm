@@ -1,0 +1,13 @@
+[package]
+name = "release-without-dist"
+version = "1.0"
+release = "1"
+summary = "A package with a non-Fedora release"
+license = "MIT"
+description = "The release intentionally omits the dist macro."
+
+[[package.changelog]]
+version = "1.0-1"
+date = "2026-06-29"
+packager = "Test <test@example.org>"
+entries = ["Initial"]

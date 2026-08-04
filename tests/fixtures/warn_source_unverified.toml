@@ -1,0 +1,7 @@
+[package]
+name = "unverified"
+version = "1.0"
+summary = "Unverified remote source"
+license = "MIT"
+description = "Remote source without checksum."
+sources = ["https://example.org/file.tar.gz"]

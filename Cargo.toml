@@ -1,11 +1,12 @@
 [package]
 name = "makerpm"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 toml = "0.8"
+toml_edit = { version = "0.22", features = ["serde"] }
 clap = { version = "4", features = ["derive"] }
 miette = { version = "7", features = ["fancy"] }
 thiserror = "2"

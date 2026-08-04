@@ -1,0 +1,18 @@
+[package]
+name = "short-description"
+version = "1.0"
+summary = "A package with short descriptions"
+license = "MIT"
+description = "Short"
+
+[[subpackage]]
+suffix = "devel"
+summary = "Development files"
+description = "Tiny"
+files.paths = ["%{_includedir}/short-description.h"]
+
+[[package.changelog]]
+version = "1.0-1"
+date = "2026-06-29"
+packager = "Test <test@example.org>"
+entries = ["Initial"]

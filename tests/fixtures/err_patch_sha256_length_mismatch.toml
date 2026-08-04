@@ -1,0 +1,8 @@
+[package]
+name = "patch-mismatch"
+version = "1.0"
+summary = "Test"
+license = "MIT"
+description = "Test"
+patches = ["fix.patch"]
+patch_sha256sums = ["abc", "def"]

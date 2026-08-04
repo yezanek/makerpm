@@ -1,0 +1,8 @@
+[package]
+name = "unsafe-source"
+version = "1.0"
+summary = "Unsafe source"
+license = "MIT"
+description = "Unsafe resolved source name."
+sources = ["../data::https://example.org/data"]
+sha256sums = ["SKIP"]

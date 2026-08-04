@@ -1,0 +1,9 @@
+[package]
+name = "cmake-pkg"
+version = "1.0"
+summary = "Cmake package"
+license = "MIT"
+description = "Tests auto-injection."
+
+[package.build]
+system = "cmake"

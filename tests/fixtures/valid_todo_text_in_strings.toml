@@ -1,0 +1,9 @@
+[package]
+name = "todo-strings"
+version = "1.0"
+summary = "Contains # TODO as quoted text"
+license = "MIT"
+url = "https://example.test/page# TODO"
+description = """
+This multiline value contains # TODO but is not a comment.
+"""
